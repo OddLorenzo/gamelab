@@ -132,6 +132,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.clearAllTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -1082,5 +1084,86 @@ describe('minor fixes', () => {
     expect(() => guest.sendAct('m0', { kind: 'wires', type: 'cut', payload: { index: 0 } })).not.toThrow();
     expect(() => guest.sendPointer(0.1, 0.1)).not.toThrow();
     guest.stop();
+  });
+});
+
+describe('default host entropy (no injected rng)', () => {
+  const level = buildLevel(9); // all four module kinds
+  const FIXED_NOW = (): number => 5_000;
+
+  /** A default-constructed host (no options) on a fresh 3-peer network; returns its started state. */
+  const defaultHost = (): { assign: Record<PeerId, Role>; modules: string } => {
+    const net = createMemoryNetwork(IDS);
+    const roles: NetMsg[] = [];
+    net[1].onMessage((_f, m) => roles.push(m));
+    const host = new HostGame(net[0], level, FIXED_NOW);
+    host.start();
+    host.stop();
+    const m = roles.find((x) => x.t === 'roles');
+    if (m?.t !== 'roles') throw new Error('no roles');
+    return { assign: m.assign, modules: json(host.snapshot()!.modules) };
+  };
+
+  /** Make crypto.getRandomValues hand out the given values, in order, then keep cycling. */
+  const stubCrypto = (values: number[]): void => {
+    let i = 0;
+    vi.stubGlobal('crypto', {
+      getRandomValues: (a: Uint32Array) => {
+        a[0] = values[i++ % values.length];
+        return a;
+      },
+    });
+  };
+
+  it('the bomb comes from crypto entropy, not from the clock', () => {
+    const bombs = new Set<string>();
+    for (let i = 0; i < 10; i++) {
+      stubCrypto([1000 + i * 7919, 5000 + i * 104729]);
+      bombs.add(defaultHost().modules);
+    }
+    expect(bombs.size).toBe(10); // different entropy, same now(): different bombs
+
+    // same entropy, different wall clocks: the very same bomb and roles
+    stubCrypto([111, 222]);
+    vi.setSystemTime(1_000);
+    const a = defaultHost();
+    stubCrypto([111, 222]);
+    vi.setSystemTime(9_999_999);
+    const b = defaultHost();
+    expect(b).toEqual(a);
+  });
+
+  it('the salt rng is a separate rng with its own fresh entropy, not the role rng continued', () => {
+    stubCrypto([424242]); // both draws return the same seed: a shared rng would differ from two fresh ones
+    const got = defaultHost();
+    expect(got.assign).toEqual(assignRoles(IDS, createRng(424242)));
+    const salt = createRng(424242).int(2 ** 31); // the FIRST output of a fresh rng, not the third
+    expect(got.modules).toBe(json(createSession({ ...level, seed: salt }).modules));
+  });
+
+  it('with Date.now frozen, 50 default hosts still differ in roles and in bombs', () => {
+    vi.setSystemTime(2_000_000);
+    const assigns = new Set<string>();
+    const bombs = new Set<string>();
+    for (let i = 0; i < 50; i++) {
+      const h = defaultHost();
+      assigns.add(json(h.assign));
+      bombs.add(h.modules);
+    }
+    expect(assigns.size).toBeGreaterThanOrEqual(2);
+    expect(bombs.size).toBeGreaterThanOrEqual(2);
+    expect(bombs.size).toBeGreaterThan(40); // 31-bit salt: practically all distinct
+  });
+
+  it('without WebCrypto it takes the weaker fallback path, still starts, and still varies', () => {
+    vi.stubGlobal('crypto', undefined);
+    vi.setSystemTime(3_000_000);
+    const random = vi.spyOn(Math, 'random');
+    random.mockReturnValue(0.123);
+    const first = defaultHost();
+    random.mockReturnValue(0.876);
+    const second = defaultHost();
+    expect(Object.values(first.assign).sort()).toEqual(['blind', 'deaf', 'mute']);
+    expect(first.modules).not.toBe(second.modules);
   });
 });

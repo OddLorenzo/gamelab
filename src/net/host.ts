@@ -28,6 +28,21 @@ export function assignRoles(ids: readonly PeerId[], rng: Rng): Record<PeerId, Ro
 const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
 
 /**
+ * 32 bits of real entropy for a host rng. Never the clock: guests see the role assignment, so a
+ * clock-seeded rng could be enumerated to predict the session salt (and so the whole bomb).
+ */
+function entropySeed(): number {
+  const c = (globalThis as { crypto?: Crypto }).crypto;
+  if (c !== undefined && typeof c.getRandomValues === 'function') {
+    return c.getRandomValues(new Uint32Array(1))[0];
+  }
+  // WEAKER fallback for a runtime without WebCrypto: a mix of clock, high resolution timer and Math.random.
+  const perf = (globalThis as { performance?: Performance }).performance;
+  const hr = perf === undefined ? 0 : Math.floor(perf.now() * 1000);
+  return (Date.now() ^ hr ^ Math.floor(Math.random() * 4294967296)) >>> 0;
+}
+
+/**
  * Authoritative side of one level. The host owns the session and the clock, and is also a
  * player: it exposes the same participant API as GuestGame for its own role. Star topology:
  * guests only ever talk to the host, the host relays pointers and emotes between them.
@@ -36,6 +51,7 @@ const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
  */
 export class HostGame implements Participant {
   private readonly rng: Rng;
+  private readonly saltRng: Rng;
   private session: Session | null = null;
   private assign: Record<PeerId, Role> = {};
   private guests: PeerId[] = [];
@@ -59,7 +75,10 @@ export class HostGame implements Participant {
     private readonly now: () => number,
     options?: { rng?: Rng },
   ) {
-    this.rng = options?.rng ?? createRng(Date.now());
+    // Roles are public to the guests, the session salt must not be derivable from them: by default
+    // the salt comes from its own rng with its own fresh entropy. An injected rng (tests) feeds both.
+    this.rng = options?.rng ?? createRng(entropySeed());
+    this.saltRng = options?.rng ?? createRng(entropySeed());
   }
 
   /** The host's own role, once started. */
@@ -102,7 +121,7 @@ export class HostGame implements Participant {
     this.localRole = this.assign[this.t.id];
     // The level id (sent to guests) determines buildLevel(id).seed, so a guest could rebuild the
     // bomb from it. The host therefore salts the session seed from its private rng.
-    this.session = createSession({ ...this.def, seed: this.rng.int(2 ** 31) });
+    this.session = createSession({ ...this.def, seed: this.saltRng.int(2 ** 31) });
     this.lastTickAt = this.now();
 
     this.t.onMessage((from, msg) => this.onMessage(from, msg));
