@@ -128,6 +128,12 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
   let shownPeers = -1;
   let chosen = 1;
 
+  /** The lobby owns the microphone track until a game takes it over. */
+  const stopMic = (): void => {
+    micTrack?.stop();
+    micTrack = null;
+  };
+
   const stopPoll = (): void => {
     if (poll !== null) clearInterval(poll);
     poll = null;
@@ -138,6 +144,7 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
     onGameStart: (info) => {
       stopPoll();
       guest = null; // handed over: destroy() must not stop it
+      micTrack = null; // the game owns the microphone track from here on
       destroyed = true; // the game owns the connection now: nothing here may touch it again
       deps.onGameStart(info);
     },
@@ -146,17 +153,32 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
 
   /* ------------------------------------------------------------ render */
 
-  const render = (): void => {
+  /**
+   * Redraw the whole lobby. Focus: 'keep' restores the control that had it (language chip),
+   * 'heading' moves it to the title, 'view' to the first useful thing of the view (the code
+   * field, the Start button when enabled, else the room code).
+   */
+  const render = (focus: 'keep' | 'heading' | 'view' = 'keep'): void => {
     if (destroyed) return;
     const focusKey = document.activeElement instanceof HTMLElement ? document.activeElement.dataset.focus : undefined;
-    const page = el('main', { cls: 'scene lobby' }, [el('h1', { text: t('app.title') })]);
+    const page = el('main', { cls: 'scene lobby' }, [el('h1', { text: t('app.title'), attrs: { tabindex: '-1' } })]);
+    if (busy) page.setAttribute('aria-busy', 'true');
     if (micDenied) page.append(el('p', { cls: 'banner', testid: 'mic-banner', text: t('ui.mic.denied'), attrs: { role: 'status' } }));
+    if (busy) page.append(el('p', { cls: 'hint', testid: 'connecting', text: t('lobby.connecting'), attrs: { role: 'status' } }));
     page.append(el('p', { cls: errorKey === null ? 'alert empty' : 'alert', testid: 'error', text: errorKey === null ? '' : t(errorKey), attrs: { role: 'alert' } }));
     if (view === 'room' && conn !== null) page.append(roomView(conn));
     else page.append(startView());
     page.append(footer());
     root.replaceChildren(page);
-    if (focusKey !== undefined) root.querySelector<HTMLElement>(`[data-focus="${focusKey}"]`)?.focus();
+    let target: HTMLElement | null = null;
+    if (focus === 'view') {
+      const start = root.querySelector<HTMLButtonElement>('[data-testid="start"]');
+      target =
+        root.querySelector<HTMLElement>('[data-testid="code-input"]') ??
+        (start !== null && !start.disabled ? start : root.querySelector<HTMLElement>('[data-testid="room-code-box"]'));
+    }
+    if (focus !== 'keep') (target ?? root.querySelector<HTMLElement>('h1'))?.focus();
+    else if (focusKey !== undefined) root.querySelector<HTMLElement>(`[data-focus="${focusKey}"]`)?.focus();
   };
 
   const button = (testid: string, text: string, onClick: () => void, cls = 'btn'): HTMLButtonElement => {
@@ -171,8 +193,7 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
     const join = button('join', t('lobby.join'), () => {
       view = 'join';
       errorKey = null;
-      render();
-      root.querySelector<HTMLInputElement>('[data-testid="code-input"]')?.focus();
+      render('view');
     });
     create.disabled = busy;
     join.disabled = busy;
@@ -191,7 +212,6 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
         type: 'text',
         'aria-label': t('lobby.codeLabel'),
         placeholder: t('lobby.codePlaceholder'),
-        maxlength: String(CODE_LENGTH),
         autocomplete: 'off',
         autocapitalize: 'characters',
         autocorrect: 'off',
@@ -224,7 +244,7 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
 
     box.append(
       el('p', { cls: 'label', text: t('lobby.codeLabel') }),
-      el('p', { cls: 'room-code' }, [
+      el('p', { cls: 'room-code', testid: 'room-code-box', attrs: { tabindex: '-1' } }, [
         el('span', { cls: 'sr-only', text: `${t('lobby.codeLabel')}: ${[...code].join(' ')}` }),
         el('span', { testid: 'room-code', text: code, attrs: { 'aria-hidden': 'true' } }),
       ]),
@@ -299,34 +319,42 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
     if (busy || destroyed) return;
     busy = true;
     errorKey = null;
-    render();
+    render('heading');
+    stopMic(); // never leave an earlier track recording
     try {
       micTrack = await deps.requestMic().catch(() => null);
+      if (destroyed) {
+        stopMic();
+        return;
+      }
       micDenied = micTrack === null;
       const room = await getCode();
       const connection = await deps.connect(room, micTrack);
       if (destroyed) {
         connection.close();
+        stopMic();
         return;
       }
       conn = connection;
       code = room;
       view = 'room';
       shownPeers = -1;
+      busy = false;
       const open = deps.unlocked();
       chosen = open.length > 0 ? Math.max(...open) : 1;
-      poll = setInterval(sync, POLL_MS);
-      sync();
+      poll = setInterval(() => sync(), POLL_MS);
+      sync('view');
+      return;
     } catch (e) {
       errorKey = errorKeyOf(e);
-    } finally {
-      busy = false;
+      stopMic();
     }
-    render();
+    busy = false;
+    render(view === 'join' ? 'view' : 'heading');
   };
 
   /** RoomConnection has no peers-changed event: look at it on a timer and redraw when it moved. */
-  const sync = (): void => {
+  const sync = (focus: 'keep' | 'view' = 'keep'): void => {
     if (conn === null || destroyed) return;
     const peerCount = conn.peers().length;
     if (peerCount === 2 && guest === null) {
@@ -340,7 +368,7 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
     }
     if (peerCount !== shownPeers) {
       shownPeers = peerCount;
-      render();
+      render(focus);
     }
   };
 
@@ -358,19 +386,21 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
     guest = null;
     conn?.close();
     conn = null;
+    stopMic();
     view = 'start';
     errorKey = null;
     joinCode = '';
     shownPeers = -1;
-    render();
+    render('heading');
   };
 
-  render();
+  render('heading');
 
   return {
     destroy() {
       destroyed = true;
       stopPoll();
+      stopMic(); // null after a handoff, so a game's track is never stopped here
       if (guest !== null) guest.stop();
       guest = null;
       root.replaceChildren();

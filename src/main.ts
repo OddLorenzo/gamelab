@@ -45,10 +45,11 @@ function createGamePlaceholder(root: HTMLElement, info: GameStartInfo): Scene {
   let alive = true;
   root.replaceChildren(
     el('main', { cls: 'scene', testid: 'game-placeholder' }, [
-      el('h1', { text: 'Game scene placeholder' }),
+      el('h1', { text: 'Game scene placeholder', attrs: { tabindex: '-1' } }),
       el('p', { cls: 'hint', text: `Level ${String(info.level.id)} - the real scene arrives in a later task.` }),
     ]),
   );
+  root.querySelector('h1')?.focus();
   info.game.onEnded((reason, stats) => {
     if (alive) showScene({ name: 'results', info, reason, stats });
   });
@@ -63,6 +64,7 @@ function createGamePlaceholder(root: HTMLElement, info: GameStartInfo): Scene {
 function leaveRoom(info: GameStartInfo): void {
   info.game.stop();
   info.conn.close();
+  info.micTrack?.stop(); // the browser's recording indicator must go off
   showScene({ name: 'lobby' });
 }
 
@@ -85,6 +87,7 @@ function showResults(root: HTMLElement, info: GameStartInfo, reason: EndReason, 
     reason,
     stats,
     levelId: info.level.id,
+    strikes: info.level.strikes,
     saveStars,
     unlocked: () => unlockedLevels(loadProgress()),
     onNext: () => playAgain(info, info.level.id + 1),

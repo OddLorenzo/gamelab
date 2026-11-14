@@ -7,27 +7,44 @@ import type { ResultsDeps } from '../../src/ui/scenes/results';
 const stats = (strikesLeft: number, msLeftRatio: number): EndStats => ({ strikesLeft, msLeftRatio });
 
 describe('starsFor', () => {
-  it('gives 3 stars exactly at strikesLeft 2 and ratio 0.4', () => {
-    expect(starsFor(stats(2, 0.4), 'won')).toBe(3);
-    expect(starsFor(stats(3, 1), 'won')).toBe(3);
+  it('strikes 3: 3 stars need strikesLeft >= 2, exactly at the boundary', () => {
+    expect(starsFor(stats(2, 0.4), 'won', 3)).toBe(3);
+    expect(starsFor(stats(3, 1), 'won', 3)).toBe(3);
+    expect(starsFor(stats(1, 1), 'won', 3)).toBe(2);
+    expect(starsFor(stats(0, 1), 'won', 3)).toBe(2);
   });
 
-  it('gives 2 stars just below either boundary', () => {
-    expect(starsFor(stats(1, 1), 'won')).toBe(2);
-    expect(starsFor(stats(2, 0.399), 'won')).toBe(2);
-    expect(starsFor(stats(0, 0.01), 'won')).toBe(2);
+  it('strikes 2: 3 stars need strikesLeft >= 1', () => {
+    expect(starsFor(stats(1, 0.4), 'won', 2)).toBe(3);
+    expect(starsFor(stats(2, 1), 'won', 2)).toBe(3);
+    expect(starsFor(stats(0, 1), 'won', 2)).toBe(2);
+  });
+
+  it('strikes 1 (stage 7+): 3 stars are reachable with no strike used', () => {
+    expect(starsFor(stats(1, 0.4), 'won', 1)).toBe(3);
+    expect(starsFor(stats(1, 1), 'won', 1)).toBe(3);
+    expect(starsFor(stats(0, 1), 'won', 1)).toBe(2);
+  });
+
+  it('the time boundary is 0.4 exactly: just below gives 2, whatever the strikes', () => {
+    for (const strikes of [1, 2, 3]) {
+      expect(starsFor(stats(3, 0.4), 'won', strikes), String(strikes)).toBe(3);
+      expect(starsFor(stats(3, 0.399), 'won', strikes), String(strikes)).toBe(2);
+    }
   });
 
   it('gives 2 stars for a win without stats', () => {
-    expect(starsFor(undefined, 'won')).toBe(2);
+    for (const strikes of [1, 2, 3]) expect(starsFor(undefined, 'won', strikes)).toBe(2);
   });
 
   it('gives 0 for a loss and for every other reason, whatever the stats', () => {
-    expect(starsFor(stats(3, 1), 'lost')).toBe(0);
-    expect(starsFor(undefined, 'lost')).toBe(0);
-    expect(starsFor(stats(3, 1), 'host-left')).toBe(0);
-    expect(starsFor(stats(3, 1), 'player-left')).toBe(0);
-    expect(starsFor(undefined, 'host-left')).toBe(0);
+    for (const strikes of [1, 2, 3]) {
+      expect(starsFor(stats(3, 1), 'lost', strikes)).toBe(0);
+      expect(starsFor(undefined, 'lost', strikes)).toBe(0);
+      expect(starsFor(stats(3, 1), 'host-left', strikes)).toBe(0);
+      expect(starsFor(stats(3, 1), 'player-left', strikes)).toBe(0);
+      expect(starsFor(undefined, 'host-left', strikes)).toBe(0);
+    }
   });
 });
 
@@ -36,6 +53,7 @@ const make = (over: Partial<ResultsDeps> = {}): ResultsDeps => ({
   reason: 'won',
   stats: stats(2, 0.5),
   levelId: 3,
+  strikes: 3,
   saveStars: vi.fn(),
   unlocked: () => [1, 2, 3, 4],
   onNext: vi.fn(),
@@ -70,6 +88,18 @@ describe('createResults', () => {
     expect(root.querySelectorAll('button')).toHaveLength(0);
     expect(q(root, 'wait-host')?.textContent).toBe(t('results.waitHost'));
     expect(q(root, 'stars-text')?.textContent).toBe(t('results.stars', { count: 3 }));
+  });
+
+  it('a 1-strike level can show 3 stars when no strike was used', () => {
+    createResults(root, make({ strikes: 1, stats: stats(1, 0.5) }));
+    expect(q(root, 'stars-text')?.textContent).toBe(t('results.stars', { count: 3 }));
+  });
+
+  it('moves focus to the title when it appears', () => {
+    createResults(root, make());
+    expect(document.activeElement).toBe(root.querySelector('h1'));
+    createResults(root, make({ reason: 'host-left', stats: undefined }));
+    expect(document.activeElement).toBe(root.querySelector('h1'));
   });
 
   it('shows 2 stars for a win that misses the 3-star condition', () => {

@@ -66,14 +66,21 @@ interface Rig {
   };
   handle: LobbyHandle;
   conn: FakeConn;
+  /** Every microphone track the fake requestMic handed out, in order. */
+  tracks: { stop: ReturnType<typeof vi.fn> }[];
 }
 
 const mount = (opts: { id?: PeerId; unlocked?: number[]; code?: string } = {}): Rig => {
   const conn = fakeConn(opts.id ?? 'aaaaaaaa');
+  const tracks: Rig['tracks'] = [];
   const deps = {
     createRoom: vi.fn(() => Promise.resolve(opts.code ?? 'ABCD')),
     connect: vi.fn((_code: string, _mic: MediaStreamTrack | null) => Promise.resolve<RoomConnection>(conn)),
-    requestMic: vi.fn(() => Promise.resolve<MediaStreamTrack | null>({ kind: 'audio' } as MediaStreamTrack)),
+    requestMic: vi.fn(() => {
+      const track = { kind: 'audio', stop: vi.fn() };
+      tracks.push(track);
+      return Promise.resolve<MediaStreamTrack | null>(track as unknown as MediaStreamTrack);
+    }),
     now: () => NOW,
     unlocked: () => opts.unlocked ?? [1],
     onGameStart: vi.fn(),
@@ -84,7 +91,7 @@ const mount = (opts: { id?: PeerId; unlocked?: number[]; code?: string } = {}): 
   const root = document.createElement('div');
   document.body.replaceChildren(root);
   const handle = createLobby(root, deps);
-  return { root, deps, handle, conn };
+  return { root, deps, handle, conn, tracks };
 };
 
 const q = (root: ParentNode, id: string): HTMLElement | null => root.querySelector(`[data-testid="${id}"]`);
@@ -171,7 +178,8 @@ describe('join code input', () => {
   it('uppercases, trims and rejects letters outside the alphabet, capped at 4', async () => {
     const r = mount();
     const input = await openJoin(r);
-    expect(input.maxLength).toBe(4);
+    // a maxlength of 4 would cut a pasted " abcd" to " abc" before sanitizeCode ever ran
+    expect(input.maxLength === -1 || input.maxLength >= 12).toBe(true);
     type(input, ' ab cd ');
     expect(input.value).toBe('ABCD');
     type(input, 'xyzzy');
@@ -179,6 +187,19 @@ describe('join code input', () => {
     type(input, 'i1lo0');
     expect(input.value).toBe('');
     type(input, 'AB<>cde');
+    expect(input.value).toBe('ABCD');
+  });
+
+  it('a pasted code longer than 4 raw characters keeps its first 4 valid letters', async () => {
+    const r = mount();
+    const input = await openJoin(r);
+    type(input, ' abcd');
+    expect(input.value).toBe('ABCD');
+    type(input, 'AB CD');
+    expect(input.value).toBe('ABCD');
+    type(input, 'abcdefg');
+    expect(input.value).toBe('ABCD');
+    type(input, '  ab   cd  ');
     expect(input.value).toBe('ABCD');
   });
 
@@ -275,7 +296,169 @@ describe('microphone', () => {
     const r = mount();
     await click(q(r.root, 'create'));
     expect(q(r.root, 'mic-banner')).toBeNull();
-    expect(r.deps.connect.mock.calls[0][1]).toEqual({ kind: 'audio' });
+    expect(r.deps.connect.mock.calls[0][1]).toBe(r.tracks[0]);
+  });
+});
+
+describe('microphone ownership', () => {
+  const full = ['bbbbbbbb', 'cccccccc'];
+
+  it('Leave stops the track', async () => {
+    const r = mount();
+    await click(q(r.root, 'create'));
+    expect(r.tracks[0].stop).not.toHaveBeenCalled();
+    await click(q(r.root, 'leave'));
+    expect(r.tracks[0].stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed join stops the track, and the retry asks for a fresh one', async () => {
+    const r = mount();
+    r.deps.connect.mockRejectedValueOnce(new Error('no-room'));
+    await joinWith(r, 'ABCD');
+    expect(r.tracks[0].stop).toHaveBeenCalledTimes(1);
+    await click(q(r.root, 'join-go'));
+    expect(r.deps.requestMic).toHaveBeenCalledTimes(2);
+    expect(r.deps.connect.mock.calls[1][1]).toBe(r.tracks[1]);
+    expect(r.tracks[1].stop).not.toHaveBeenCalled();
+    expect(r.tracks[0].stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed create stops the track too', async () => {
+    const r = mount();
+    r.deps.createRoom.mockRejectedValueOnce(new Error('network'));
+    await click(q(r.root, 'create'));
+    expect(r.tracks[0].stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('destroy without a handoff stops the track', async () => {
+    const r = mount();
+    await click(q(r.root, 'create'));
+    r.handle.destroy();
+    expect(r.tracks[0].stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('destroy while the connection is still pending stops the track once it arrives', async () => {
+    const r = mount();
+    let resolve: (c: RoomConnection) => void = () => undefined;
+    r.deps.connect.mockReturnValueOnce(new Promise<RoomConnection>((res) => (resolve = res)));
+    await click(q(r.root, 'create'));
+    r.handle.destroy();
+    resolve(r.conn);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(r.conn.closed).toBe(true);
+    expect(r.tracks[0].stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('a host handoff does NOT stop the track, not even on the destroy that follows', async () => {
+    const r = mount();
+    await click(q(r.root, 'create'));
+    r.conn.peerIds = full;
+    await tick();
+    await click(q(r.root, 'start'));
+    r.handle.destroy();
+    expect(r.tracks[0].stop).not.toHaveBeenCalled();
+    r.deps.onGameStart.mock.calls[0][0].game.stop();
+  });
+
+  it('a guest handoff does NOT stop the track either', async () => {
+    const r = mount({ id: 'bbbbbbbb' });
+    await joinWith(r, 'ABCD');
+    r.conn.peerIds = ['aaaaaaaa', 'cccccccc'];
+    await tick();
+    r.conn.deliver('aaaaaaaa', {
+      t: 'roles',
+      assign: { aaaaaaaa: 'blind', bbbbbbbb: 'deaf', cccccccc: 'mute' },
+      level: { ...buildLevel(1), seed: 0 },
+    });
+    r.handle.destroy();
+    expect(r.tracks[0].stop).not.toHaveBeenCalled();
+    r.deps.onGameStart.mock.calls[0][0].game.stop();
+  });
+});
+
+describe('focus and busy state', () => {
+  it('focus starts on the title', () => {
+    const r = mount();
+    expect(document.activeElement).toBe(r.root.querySelector('h1'));
+    expect(r.root.querySelector('h1')?.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('after Create focus lands on the room code when Start is not yet enabled', async () => {
+    const r = mount();
+    await click(q(r.root, 'create'));
+    expect(document.activeElement).toBe(q(r.root, 'room-code-box'));
+  });
+
+  it('after Create focus lands on Start when the host is already enabled', async () => {
+    const r = mount();
+    r.conn.peerIds = ['bbbbbbbb', 'cccccccc'];
+    await click(q(r.root, 'create'));
+    expect(document.activeElement).toBe(q(r.root, 'start'));
+  });
+
+  it('opening the join form focuses the code field', async () => {
+    const r = mount();
+    const input = await openJoin(r);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('a failed join puts focus back on the code field', async () => {
+    const r = mount();
+    r.deps.connect.mockRejectedValueOnce(new Error('full'));
+    await joinWith(r, 'ABCD');
+    expect(document.activeElement).toBe(q(r.root, 'code-input'));
+  });
+
+  it('a failed create puts focus on the title', async () => {
+    const r = mount();
+    r.deps.createRoom.mockRejectedValueOnce(new Error('network'));
+    await click(q(r.root, 'create'));
+    expect(document.activeElement).toBe(r.root.querySelector('h1'));
+  });
+
+  it('Leave puts focus on the title', async () => {
+    const r = mount();
+    await click(q(r.root, 'create'));
+    await click(q(r.root, 'leave'));
+    expect(document.activeElement).toBe(r.root.querySelector('h1'));
+  });
+
+  it('a roster change does not steal focus from the control that has it', async () => {
+    const r = mount({ unlocked: [1, 2, 3] });
+    await click(q(r.root, 'create'));
+    r.conn.peerIds = ['bbbbbbbb'];
+    await tick(); // first redraw for the new roster
+    r.root.querySelector<HTMLElement>('[data-level="2"]')?.focus();
+    r.conn.peerIds = ['bbbbbbbb', 'cccccccc'];
+    await tick();
+    expect(document.activeElement).toBe(r.root.querySelector('[data-level="2"]'));
+  });
+
+  it('shows a connecting status and aria-busy while the connection is pending, then clears both on success', async () => {
+    const r = mount();
+    let resolve: (c: RoomConnection) => void = () => undefined;
+    r.deps.connect.mockReturnValueOnce(new Promise<RoomConnection>((res) => (resolve = res)));
+    await click(q(r.root, 'create'));
+    expect(q(r.root, 'connecting')?.textContent).toBe(t('lobby.connecting'));
+    expect(q(r.root, 'connecting')?.getAttribute('role')).toBe('status');
+    expect(r.root.querySelector('main')?.getAttribute('aria-busy')).toBe('true');
+    resolve(r.conn);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(q(r.root, 'connecting')).toBeNull();
+    expect(r.root.querySelector('main')?.hasAttribute('aria-busy')).toBe(false);
+  });
+
+  it('clears the connecting status and aria-busy after a failure too', async () => {
+    const r = mount();
+    let reject: (e: Error) => void = () => undefined;
+    r.deps.connect.mockReturnValueOnce(new Promise<RoomConnection>((_res, rej) => (reject = rej)));
+    await joinWith(r, 'ABCD');
+    expect(q(r.root, 'connecting')).not.toBeNull();
+    reject(new Error('network'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(q(r.root, 'connecting')).toBeNull();
+    expect(r.root.querySelector('main')?.hasAttribute('aria-busy')).toBe(false);
+    expect(alertText(r)).toBe(t('err.network'));
   });
 });
 
@@ -403,7 +586,7 @@ describe('host', () => {
     expect(info.game).toBeInstanceOf(HostGame);
     expect(info.level).toEqual(buildLevel(2));
     expect(info.code).toBe('ABCD');
-    expect(info.micTrack).toEqual({ kind: 'audio' });
+    expect(info.micTrack).toBe(r.tracks[0]);
     expect(vi.getTimerCount()).toBe(2); // only the HostGame timers: the lobby polling is gone
     (info.game as HostGame).stop();
   });

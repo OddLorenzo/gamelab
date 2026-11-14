@@ -15,6 +15,7 @@ export const en: Record<string, string> = {
   'lobby.seatYou': 'You',
   'lobby.seatFilled': 'Player joined',
   'lobby.seatEmpty': 'Free seat',
+  'lobby.connecting': 'Connecting...',
   'lobby.waiting': 'Waiting for the other players...',
   'lobby.start': 'Start',
   'lobby.waitHost': 'Waiting for the host to start...',
@@ -31,7 +32,7 @@ export const en: Record<string, string> = {
 
   'results.won': 'Bomb defused!',
   'results.lost': 'Boom! The bomb went off.',
-  'results.stars': '{count} of 3 stars',
+  'results.stars': 'Stars: {count} of 3',
   'results.next': 'Next level',
   'results.retry': 'Try again',
   'results.lobby': 'Back to the lobby',
@@ -68,6 +69,7 @@ export const fr: Record<string, string> = {
   'lobby.seatYou': 'Toi',
   'lobby.seatFilled': 'Joueur arrivé',
   'lobby.seatEmpty': 'Place libre',
+  'lobby.connecting': 'Connexion...',
   'lobby.waiting': 'On attend les autres joueurs...',
   'lobby.start': 'Lancer',
   'lobby.waitHost': "On attend que l'hôte lance la partie...",
@@ -84,10 +86,10 @@ export const fr: Record<string, string> = {
 
   'results.won': 'Bombe désamorcée !',
   'results.lost': 'Boum ! La bombe a explosé.',
-  'results.stars': '{count} étoiles sur 3',
+  'results.stars': 'Étoiles : {count} sur 3',
   'results.next': 'Niveau suivant',
   'results.retry': 'Réessayer',
-  'results.lobby': 'Retour au salon',
+  'results.lobby': 'Retour à la salle',
   'results.waitHost': "On attend que l'hôte choisisse la suite...",
 
   'setting.jungle': 'La Jungle',
