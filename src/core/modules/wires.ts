@@ -29,13 +29,13 @@ export function correctIndex(wires: readonly Wire[]): number {
   switch (wires.length) {
     case 3:
       if (count(wires, 'red') === 0) return 1;
-      if (lastColor === 'white') return last;
+      if (lastColor === 'white') return 0;
       if (count(wires, 'blue') > 1) return lastIndexOf(wires, 'blue');
       return last;
     case 4:
       if (count(wires, 'red') > 1) return lastIndexOf(wires, 'red');
       if (lastColor === 'yellow' && count(wires, 'red') === 0) return 0;
-      if (count(wires, 'blue') === 1) return 0;
+      if (count(wires, 'blue') === 1) return lastIndexOf(wires, 'blue');
       if (count(wires, 'yellow') > 1) return last;
       return 1;
     case 5:
@@ -45,7 +45,9 @@ export function correctIndex(wires: readonly Wire[]): number {
       return 0;
     case 6:
       if (count(wires, 'yellow') === 0) return 2;
-      if (count(wires, 'yellow') === 1 && count(wires, 'white') > 1) return 3;
+      if (count(wires, 'yellow') === 1 && count(wires, 'white') > 1) {
+        return lastIndexOf(wires, 'white');
+      }
       if (count(wires, 'white') === 0) return last;
       return 3;
     default:
@@ -56,8 +58,10 @@ export function correctIndex(wires: readonly Wire[]): number {
 const wiresOf = (state: ModuleState): Wire[] => state.data['wires'] as Wire[];
 
 // Difficulty 1..5 spreads linearly over 3..6 wires: 3, 4, 5, 5, 6.
-const wireCountFor = (difficulty: number): number =>
-  Math.round(3 + ((Math.min(5, Math.max(1, difficulty)) - 1) * 3) / 4);
+const wireCountFor = (difficulty: number): number => {
+  const d = Number.isNaN(difficulty) ? 1 : Math.min(5, Math.max(1, difficulty));
+  return Math.round(3 + ((d - 1) * 3) / 4);
+};
 
 // Roles: deaf sees colors and order, mute reads the manual, blind taps a position to cut.
 export const wiresModule: BombModule = {

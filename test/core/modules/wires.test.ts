@@ -24,6 +24,9 @@ describe('wires module: init', () => {
     expect(counts).toEqual([3, 4, 5, 5, 6]);
     expect(wiresOf(wiresModule.init('w', createRng(7), 0)).length).toBe(3);
     expect(wiresOf(wiresModule.init('w', createRng(7), 99)).length).toBe(6);
+    expect(wiresOf(wiresModule.init('w', createRng(7), NaN)).length).toBe(3);
+    expect(wiresOf(wiresModule.init('w', createRng(7), Infinity)).length).toBe(6);
+    expect(wiresOf(wiresModule.init('w', createRng(7), -Infinity)).length).toBe(3);
   });
 
   it('seed 7 difficulty 1 gives 3 wires, difficulty 5 gives 6 wires', () => {
@@ -55,25 +58,38 @@ describe('correctIndex rules', () => {
   it('3 wires: no red cuts the second', () => {
     expect(correctIndex(make(['blue', 'yellow', 'green']))).toBe(1);
   });
-  it('3 wires: has red, last white cuts the last', () => {
-    expect(correctIndex(make(['red', 'green', 'white']))).toBe(2);
+  it('3 wires: has red, last white cuts the first', () => {
+    expect(correctIndex(make(['red', 'green', 'white']))).toBe(0);
+  });
+  it('3 wires: no red beats last white', () => {
+    expect(correctIndex(make(['blue', 'green', 'white']))).toBe(1);
   });
   it('3 wires: has red, last not white, two blues cuts the last blue', () => {
     expect(correctIndex(make(['blue', 'blue', 'red']))).toBe(1);
-    expect(correctIndex(make(['blue', 'red', 'blue']))).toBe(2);
+    expect(correctIndex(make(['red', 'blue', 'blue']))).toBe(2);
   });
   it('3 wires: otherwise cuts the last', () => {
     expect(correctIndex(make(['red', 'yellow', 'green']))).toBe(2);
+    expect(correctIndex(make(['blue', 'red', 'green']))).toBe(2);
   });
 
   it('4 wires: more than one red cuts the last red', () => {
-    expect(correctIndex(make(['red', 'red', 'green', 'yellow']))).toBe(1);
+    expect(correctIndex(make(['red', 'green', 'red', 'white']))).toBe(2);
+  });
+  it('4 wires: more than one red beats exactly one blue', () => {
+    expect(correctIndex(make(['red', 'blue', 'red', 'white']))).toBe(2);
   });
   it('4 wires: last yellow with no red cuts the first', () => {
-    expect(correctIndex(make(['green', 'white', 'blue', 'yellow']))).toBe(0);
+    expect(correctIndex(make(['green', 'white', 'white', 'yellow']))).toBe(0);
   });
-  it('4 wires: exactly one blue cuts the first', () => {
-    expect(correctIndex(make(['white', 'blue', 'green', 'red']))).toBe(0);
+  it('4 wires: last yellow with no red beats exactly one blue', () => {
+    expect(correctIndex(make(['green', 'blue', 'white', 'yellow']))).toBe(0);
+  });
+  it('4 wires: exactly one blue cuts that blue wire', () => {
+    expect(correctIndex(make(['white', 'green', 'blue', 'red']))).toBe(2);
+  });
+  it('4 wires: exactly one blue beats more than one yellow', () => {
+    expect(correctIndex(make(['yellow', 'blue', 'red', 'yellow']))).toBe(1);
   });
   it('4 wires: more than one yellow cuts the last', () => {
     expect(correctIndex(make(['yellow', 'red', 'white', 'yellow']))).toBe(3);
@@ -85,7 +101,10 @@ describe('correctIndex rules', () => {
   it('5 wires: last green cuts the fourth', () => {
     expect(correctIndex(make(['red', 'blue', 'white', 'yellow', 'green']))).toBe(3);
   });
-  it('5 wires: one red and more than one yellow cuts the first', () => {
+  it('5 wires: last green beats one red and more than one yellow', () => {
+    expect(correctIndex(make(['red', 'yellow', 'yellow', 'blue', 'green']))).toBe(3);
+  });
+  it('5 wires: one red and more than one yellow cuts the first, even with no green', () => {
     expect(correctIndex(make(['white', 'red', 'yellow', 'yellow', 'blue']))).toBe(0);
   });
   it('5 wires: no green cuts the second', () => {
@@ -98,8 +117,11 @@ describe('correctIndex rules', () => {
   it('6 wires: no yellow cuts the third', () => {
     expect(correctIndex(make(['red', 'blue', 'green', 'white', 'white', 'red']))).toBe(2);
   });
-  it('6 wires: one yellow and more than one white cuts the fourth', () => {
-    expect(correctIndex(make(['yellow', 'blue', 'green', 'white', 'white', 'red']))).toBe(3);
+  it('6 wires: no yellow beats no white', () => {
+    expect(correctIndex(make(['red', 'blue', 'green', 'green', 'blue', 'red']))).toBe(2);
+  });
+  it('6 wires: one yellow and more than one white cuts the last white', () => {
+    expect(correctIndex(make(['yellow', 'white', 'green', 'blue', 'white', 'red']))).toBe(4);
   });
   it('6 wires: no white cuts the last', () => {
     expect(correctIndex(make(['yellow', 'yellow', 'green', 'blue', 'red', 'red']))).toBe(5);
@@ -141,6 +163,8 @@ describe('wires module: act and solve', () => {
     const r = wiresModule.act(init, cut(0));
     expect(r.outcome).toBe('strike');
     expect(wiresOf(r.state)[0].cut).toBe(true);
+    expect(wiresOf(r.state).slice(1)).toEqual(wiresOf(init).slice(1));
+    expect(wiresOf(r.state).map((w) => w.color)).toEqual(['blue', 'yellow', 'green']);
     expect(JSON.stringify(init)).toBe(snapshot);
   });
 
