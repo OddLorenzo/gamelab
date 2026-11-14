@@ -309,7 +309,14 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
       lang.append(chip);
     }
     const version = deps.version ?? 'v0';
-    return el('footer', { cls: 'foot' }, [lang, el('p', { cls: 'version', text: t('lobby.footerVersion', { version }) })]);
+    // Relative to the page (vite `base: './'`), so it works under any sub-path of the host.
+    const privacy = el('a', {
+      cls: 'foot-link',
+      text: t('lobby.privacy'),
+      testid: 'privacy',
+      attrs: { href: `${import.meta.env.BASE_URL}privacy.html`, rel: 'noopener' },
+    });
+    return el('footer', { cls: 'foot' }, [lang, privacy, el('p', { cls: 'version', text: t('lobby.footerVersion', { version }) })]);
   };
 
   /* ------------------------------------------------------------ actions */

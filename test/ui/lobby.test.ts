@@ -7,6 +7,7 @@ import type { RoomConnection } from '../../src/net/transport';
 import { setLang, t } from '../../src/ui/i18n';
 import { CODE_ALPHABET, createLobby, sanitizeCode } from '../../src/ui/scenes/lobby';
 import type { GameStartInfo, LobbyDeps, LobbyHandle } from '../../src/ui/scenes/lobby';
+import styles from '../../src/ui/styles.css?raw';
 
 /* ---------------------------------------------------------------- fakes */
 
@@ -171,6 +172,52 @@ describe('start view', () => {
     expect(t('lobby.create')).not.toBe('Create a room');
     expect(q(r.root, 'lang-fr')?.getAttribute('aria-pressed')).toBe('true');
     expect(document.activeElement).toBe(q(r.root, 'lang-fr'));
+  });
+});
+
+describe('privacy link', () => {
+  const link = (root: ParentNode): HTMLAnchorElement | null => q(root, 'privacy') as HTMLAnchorElement | null;
+
+  it('is in the footer, points at privacy.html next to the page, opens in the same tab', () => {
+    const r = mount();
+    const a = link(r.root);
+    expect(a).not.toBeNull();
+    expect(a?.tagName).toBe('A');
+    expect(a?.closest('footer')).not.toBeNull();
+    expect(a?.getAttribute('href')).toBe(`${import.meta.env.BASE_URL}privacy.html`);
+    expect(a?.getAttribute('href')).not.toMatch(/^[a-z][a-z0-9+.-]*:|^\/\//i);
+    expect(a?.hasAttribute('target')).toBe(false);
+    expect(a?.getAttribute('rel')).toBe('noopener');
+  });
+
+  it('is labelled in both languages', async () => {
+    const r = mount();
+    expect(link(r.root)?.textContent).toBe('Privacy');
+    await click(q(r.root, 'lang-fr'));
+    expect(link(r.root)?.textContent).toBe('Confidentialité');
+    await click(q(r.root, 'lang-en'));
+    expect(link(r.root)?.textContent).toBe('Privacy');
+  });
+
+  it('is keyboard focusable (a real link with an href, no negative tabindex)', () => {
+    const r = mount();
+    const a = link(r.root) as HTMLAnchorElement;
+    expect(a.getAttribute('tabindex')).toBeNull();
+    a.focus();
+    expect(document.activeElement).toBe(a);
+  });
+
+  it('is also there in the room view, and the v0 label stays', async () => {
+    const r = mount();
+    await click(q(r.root, 'create'));
+    await tick();
+    expect(link(r.root)).not.toBeNull();
+    expect(r.root.querySelector('footer')?.textContent).toContain('v0');
+  });
+
+  it('has a 44 px tap height in the stylesheet', () => {
+    const rule = /\.foot-link\s*\{[^}]*\}/.exec(styles)?.[0] ?? '';
+    expect(rule).toMatch(/min-height:\s*44px/);
   });
 });
 

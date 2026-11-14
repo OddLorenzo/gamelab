@@ -16,6 +16,7 @@ const REQUIRED = [
   'level.n',
   'lobby.lang',
   'lobby.footerVersion',
+  'lobby.privacy',
   'err.full',
   'err.noRoom',
   'err.network',

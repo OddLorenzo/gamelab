@@ -22,6 +22,7 @@ export const en: Record<string, string> = {
   'lobby.level': 'Level',
   'level.n': 'Level {n}',
   'lobby.lang': 'Language',
+  'lobby.privacy': 'Privacy',
   'lobby.footerVersion': 'Monkey Bomb {version}',
 
   'err.full': 'This room is full.',
@@ -164,6 +165,7 @@ export const fr: Record<string, string> = {
   'lobby.level': 'Niveau',
   'level.n': 'Niveau {n}',
   'lobby.lang': 'Langue',
+  'lobby.privacy': 'Confidentialité',
   'lobby.footerVersion': 'Monkey Bomb {version}',
 
   'err.full': 'Cette salle est pleine.',

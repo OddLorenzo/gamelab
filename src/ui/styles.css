@@ -241,6 +241,18 @@
   padding-top: 1rem;
 }
 
+.foot-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0.75rem;
+  color: var(--muted);
+  text-decoration: underline;
+}
+
 .stars {
   margin: 0;
   font-size: 4rem;

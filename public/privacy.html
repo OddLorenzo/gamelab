@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Monkey Bomb - Privacy / Confidentialité</title>
+  <style>
+    :root {
+      --bg: #fdf8ee;
+      --fg: #1f1a12;
+      --muted: #5d5444;
+      --card: #ffffff;
+      --line: #d9ceb8;
+      --link: #8a3b00;
+      --focus: #0b57d0;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14110c;
+        --fg: #f3ecdc;
+        --muted: #b9ad96;
+        --card: #1d1912;
+        --line: #3a3326;
+        --link: #ffb270;
+        --focus: #8ab4ff;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 1rem/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: 0 max(1rem, env(safe-area-inset-right)) 2rem max(1rem, env(safe-area-inset-left));
+    }
+    main { max-width: 42rem; margin: 0 auto; }
+    nav { display: flex; gap: 0.5rem; padding: 1rem 0; }
+    nav a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0 1rem;
+      border: 2px solid var(--line);
+      border-radius: 999px;
+      background: var(--card);
+      color: var(--fg);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    a { color: var(--link); }
+    a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+    section { background: var(--card); border: 1px solid var(--line); border-radius: 0.9rem; padding: 1rem 1.25rem 1.25rem; margin-bottom: 1.5rem; }
+    h1 { font-size: 1.6rem; line-height: 1.25; margin: 0.5rem 0 0.75rem; }
+    h2 { font-size: 1.15rem; margin: 1.5rem 0 0.25rem; }
+    p, ul { margin: 0.5rem 0; }
+    ul { padding-left: 1.25rem; }
+    li { margin: 0.25rem 0; }
+    .date { color: var(--muted); font-size: 0.9rem; }
+    .back { display: inline-flex; align-items: center; min-height: 44px; }
+  </style>
+</head>
+<body>
+  <main>
+    <nav aria-label="Language / Langue">
+      <a href="#en" hreflang="en" lang="en">English</a>
+      <a href="#fr" hreflang="fr" lang="fr">Français</a>
+    </nav>
+
+    <section id="en" lang="en" aria-labelledby="h-en">
+      <h1 id="h-en">Monkey Bomb: privacy</h1>
+      <p class="date">Last updated: 2026-11-15</p>
+      <p>Monkey Bomb is a game for three players who talk to each other to defuse a bomb. This page says what the game does with your data. It is short because there is little to tell.</p>
+
+      <h2>Microphone</h2>
+      <p>The game asks for your <strong>microphone</strong> only, so that the three players of a game can talk to each other. Voice audio goes directly between the three players' devices (peer to peer). The game does not record it, does not store it and does not send it to any server of the game. The game does not use the camera.</p>
+
+      <h2>What stays on your device</h2>
+      <p>Only your chosen language and the levels and stars you unlocked, in your browser's local storage. Nothing from it is sent anywhere. Clearing the site data in your browser erases it.</p>
+
+      <h2>No accounts, no analytics, no ads</h2>
+      <p>There is no account or sign-in, no analytics, no tracker and no advertising. This page loads no external fonts or scripts.</p>
+
+      <h2>Connecting the players</h2>
+      <p>To put the three players in contact, the game uses a small service (a Cloudflare Worker). To do this it sees the 4-letter room code, a temporary connection identifier and your IP address. It uses them only for the time needed to connect the players and to limit abuse, and does not keep them as a record of who played.</p>
+      <p>When a direct connection between two devices is impossible (some networks and mobile data), a relay server (TURN) may carry the traffic between them. This traffic is encrypted (WebRTC encrypts audio and game data), so the relay cannot listen to it. The relay sees, as any network does, that two addresses exchange data.</p>
+
+      <h2>Taking back the microphone permission</h2>
+      <ul>
+        <li>In a browser: open the site settings (the icon next to the address bar) and set Microphone to Block or Ask. Reload the page to apply it.</li>
+        <li>On a phone: Settings, then your browser or the app, then Permissions, then Microphone.</li>
+      </ul>
+      <p>Without the microphone you can still play, but you cannot talk to the others.</p>
+
+      <h2>Children</h2>
+      <p>The game has no text chat and no accounts. It does have voice between the players who joined the same room, so only share the room code with people you know. Parents and guardians decide whether a child may use the microphone.</p>
+
+      <h2>Contact</h2>
+      <p>Questions about this page: <a href="mailto:OWNER_EMAIL">OWNER_EMAIL</a></p>
+      <p><a class="back" href="./">Back to the game</a></p>
+    </section>
+
+    <section id="fr" lang="fr" aria-labelledby="h-fr">
+      <h1 id="h-fr">Monkey Bomb : confidentialité</h1>
+      <p class="date">Dernière mise à jour : 2026-11-15</p>
+      <p>Monkey Bomb est un jeu pour trois joueurs qui se parlent pour désamorcer une bombe. Cette page explique ce que le jeu fait de vos données. Elle est courte, car il y a peu à dire.</p>
+
+      <h2>Microphone</h2>
+      <p>Le jeu demande uniquement votre <strong>microphone</strong>, pour que les trois joueurs d'une partie puissent se parler. La voix circule directement entre les appareils des trois joueurs (pair à pair). Le jeu ne l'enregistre pas, ne la conserve pas et ne l'envoie à aucun serveur du jeu. Le jeu n'utilise pas la caméra.</p>
+
+      <h2>Ce qui reste sur votre appareil</h2>
+      <p>Seulement la langue choisie et les niveaux et étoiles débloqués, dans le stockage local de votre navigateur. Rien de tout cela n'est envoyé. Effacer les données du site dans votre navigateur les supprime.</p>
+
+      <h2>Pas de compte, pas de statistiques, pas de publicité</h2>
+      <p>Il n'y a ni compte ni connexion, ni outil de statistiques, ni traceur, ni publicité. Cette page ne charge aucune police ni aucun script externe.</p>
+
+      <h2>Mise en relation des joueurs</h2>
+      <p>Pour mettre les trois joueurs en contact, le jeu utilise un petit service (un Cloudflare Worker). Il voit pour cela le code de salle à 4 lettres, un identifiant de connexion temporaire et votre adresse IP. Il les utilise seulement le temps de connecter les joueurs et de limiter les abus, et ne les conserve pas comme historique des joueurs.</p>
+      <p>Quand une connexion directe entre deux appareils est impossible (certains réseaux et les données mobiles), un serveur relais (TURN) peut transporter les échanges entre eux. Ces échanges sont chiffrés (WebRTC chiffre l'audio et les données de jeu) : le relais ne peut pas les écouter. Le relais voit, comme tout réseau, que deux adresses échangent des données.</p>
+
+      <h2>Retirer l'autorisation du microphone</h2>
+      <ul>
+        <li>Dans un navigateur : ouvrez les paramètres du site (l'icône à côté de la barre d'adresse) et réglez Microphone sur Bloquer ou Demander. Rechargez la page pour appliquer.</li>
+        <li>Sur téléphone : Réglages, puis votre navigateur ou l'application, puis Autorisations, puis Microphone.</li>
+      </ul>
+      <p>Sans microphone, vous pouvez jouer, mais vous ne pouvez pas parler aux autres.</p>
+
+      <h2>Enfants</h2>
+      <p>Le jeu n'a ni messagerie écrite ni compte. Il comporte de la voix entre les joueurs qui ont rejoint la même salle : ne partagez le code de salle qu'avec des personnes que vous connaissez. Les parents et tuteurs décident si un enfant peut utiliser le microphone.</p>
+
+      <h2>Contact</h2>
+      <p>Questions sur cette page : <a href="mailto:OWNER_EMAIL">OWNER_EMAIL</a></p>
+      <p><a class="back" href="./">Retour au jeu</a></p>
+    </section>
+  </main>
+</body>
+</html>
