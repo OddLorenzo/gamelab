@@ -1,4 +1,7 @@
+import { handleTurn } from './turn';
+
 export { Room } from './room';
+export { RateLimiter } from './rate-limiter';
 
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ';
 const CODE_RE = new RegExp(`^[${CODE_ALPHABET}]{4}$`);
@@ -40,6 +43,8 @@ export default {
       if (request.method !== 'POST') return json({ error: 'method-not-allowed' }, 405, { allow: 'POST' });
       return createRoom(env);
     }
+
+    if (pathname === '/turn') return handleTurn(request, env);
 
     const m = /^\/rooms\/([^/]+)\/ws$/.exec(pathname);
     if (m) {
