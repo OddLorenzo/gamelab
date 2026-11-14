@@ -32,6 +32,9 @@ const REQUIRED = [
   'role.deaf',
   'role.mute',
   'ui.mic.denied',
+  'game.waiting',
+  'game.player',
+  'game.emoteFrom',
   ...SETTINGS,
 ];
 

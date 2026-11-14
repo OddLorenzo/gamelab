@@ -134,6 +134,10 @@ export const en: Record<string, string> = {
   'manual.code.rule.5':
     'The 4 digits are typed, then submitted. The keypad is like a phone: 1 2 3, then 4 5 6, then 7 8 9, then clear, 0, submit. A wrong code is a strike and wipes the digits. Clear erases what was typed.',
 
+  'game.waiting': 'Getting your role...',
+  'game.player': 'Player {n}',
+  'game.emoteFrom': '{player}: {emote}',
+
   'ui.mic.denied': 'Your microphone is off, so nobody can hear you. The game still works: use gestures and emotes.',
 };
 
@@ -268,6 +272,10 @@ export const fr: Record<string, string> = {
     'Exemple : numéro de série K7B3M9. Valeurs : 11, 7, 2, 3, 13, 9, donc S = 45.\nChiffre 1 : 45 + 1×11 + 0 = 56, donc 6.\nChiffre 2 : 45 + 2×7 + 3 = 62, donc 2.\nChiffre 3 : 45 + 3×2 + 6 = 57, donc 7.\nChiffre 4 : 45 + 4×3 + 9 = 66, donc 6.\nLe code est 6276.',
   'manual.code.rule.5':
     "Les 4 chiffres sont tapés, puis validés. Le clavier ressemble à celui d'un téléphone : 1 2 3, puis 4 5 6, puis 7 8 9, puis effacer, 0, valider. Un mauvais code compte comme une erreur et efface les chiffres. Effacer supprime ce qui a été tapé.",
+
+  'game.waiting': 'Attribution de ton rôle...',
+  'game.player': 'Joueur {n}',
+  'game.emoteFrom': '{player} : {emote}',
 
   'ui.mic.denied':
     "Ton micro est coupé : personne ne peut t'entendre. Le jeu fonctionne quand même, utilise les gestes et les emotes.",

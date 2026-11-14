@@ -448,3 +448,93 @@
   border-color: var(--accent);
   transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px)));
 }
+
+/* game scene */
+
+.scene.game {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  gap: 0;
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  margin: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.game-banner {
+  flex: none;
+  padding: 0.3rem 0.6rem;
+  border-width: 1px;
+  border-radius: 0;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.game-stage {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* the mute player reads: the manual scrolls inside the stage, the page itself never does */
+.scene.game[data-role='mute'] .game-stage {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.game-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.game-waiting {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+}
+
+.game-manual {
+  min-height: 100%;
+}
+
+/* bottom centre, clear of the emote toggle (56 px + 1 rem) on the right */
+.game-toast {
+  position: fixed;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 15;
+  max-width: calc(100% - 12rem);
+  padding: 0.4rem 0.9rem;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--fg);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.game-toast[hidden] {
+  display: none;
+}
