@@ -53,6 +53,87 @@ export const en: Record<string, string> = {
   'role.deaf': 'Deaf',
   'role.mute': 'Mute',
 
+  'color.red': 'red',
+  'color.blue': 'blue',
+  'color.yellow': 'yellow',
+  'color.green': 'green',
+  'color.white': 'white',
+
+  'emote.open': 'Emotes',
+  'emote.point': 'Look here',
+  'emote.wave': 'Hello',
+  'emote.slap': 'Slap',
+  'emote.panic': 'Panic',
+  'emote.yes': 'Yes',
+  'emote.no': 'No',
+
+  'glyph.flame': 'flame',
+  'glyph.spiral': 'spiral',
+  'glyph.crab': 'crab',
+  'glyph.hand': 'hand',
+  'glyph.anchor': 'anchor',
+  'glyph.eye': 'eye',
+  'glyph.crown': 'crown',
+  'glyph.moon': 'moon',
+  'glyph.key': 'key',
+  'glyph.cloud': 'cloud',
+  'glyph.arrow': 'arrow',
+  'glyph.tree': 'tree',
+  'glyph.shell': 'shell',
+  'glyph.leaf': 'leaf',
+  'glyph.gear': 'gear',
+  'glyph.bolt': 'lightning bolt',
+  'glyph.drop': 'drop',
+  'glyph.star': 'star',
+  'glyph.bell': 'bell',
+  'glyph.wave': 'wave',
+
+  'manual.empty': 'Nothing to read yet. The manual pages show up when the game starts.',
+  'manual.prev': 'Previous page',
+  'manual.next': 'Next page',
+  'manual.column': 'Column {n}',
+
+  'manual.wires.title': 'Wires',
+  'manual.wires.rule.3':
+    '3 wires. Count the wires from the top: the first wire is the top one. Check the lines in this order and stop at the first one that applies:\n1. No {red} wire: cut the second wire.\n2. Otherwise, if the last wire is {white}: cut the first wire.\n3. Otherwise, if there is more than one {blue} wire: cut the last {blue} wire.\n4. Otherwise: cut the last wire.',
+  'manual.wires.rule.4':
+    '4 wires. Count the wires from the top: the first wire is the top one. Check the lines in this order and stop at the first one that applies:\n1. More than one {red} wire: cut the last {red} wire.\n2. Otherwise, if the last wire is {yellow} and there is no {red} wire: cut the first wire.\n3. Otherwise, if there is exactly one {blue} wire: cut that {blue} wire.\n4. Otherwise, if there is more than one {yellow} wire: cut the last wire.\n5. Otherwise: cut the second wire.',
+  'manual.wires.rule.5':
+    '5 wires. Count the wires from the top: the first wire is the top one. Check the lines in this order and stop at the first one that applies:\n1. If the last wire is {green}: cut the fourth wire.\n2. Otherwise, if there is exactly one {red} wire and more than one {yellow} wire: cut the first wire.\n3. Otherwise, if there is no {green} wire: cut the second wire.\n4. Otherwise: cut the first wire.',
+  'manual.wires.rule.6':
+    '6 wires. Count the wires from the top: the first wire is the top one. Check the lines in this order and stop at the first one that applies:\n1. No {yellow} wire: cut the third wire.\n2. Otherwise, if there is exactly one {yellow} wire and more than one {white} wire: cut the last {white} wire.\n3. Otherwise, if there is no {white} wire: cut the last wire.\n4. Otherwise: cut the fourth wire.',
+
+  'manual.button.title': 'The button',
+  'manual.button.rule.1':
+    'Look at the color of the button and the word written on it (HOLD, PRESS or ABORT). Check the lines 1 to 5 in order and stop at the first one that applies:\n1. The {white} button labelled ABORT: tap.',
+  'manual.button.rule.2': '2. The {blue} button, whatever the label: hold.',
+  'manual.button.rule.3': '3. Any other button labelled ABORT: hold.',
+  'manual.button.rule.4': '4. The {yellow} button labelled PRESS: hold.',
+  'manual.button.rule.5': '5. Anything else: tap.',
+  'manual.button.rule.6':
+    'A tap: touch the button and let go at once. A hold: keep the finger on the button, then let go at the moment when the last digit of the seconds on the timer is the digit on the button (timer at 2:47 and digit 7: let go while the timer shows 7). Letting go at another digit is a strike.',
+
+  'manual.symbols.title': 'Symbols',
+  'manual.symbols.rule.1':
+    'The module shows 4 symbols in a 2 by 2 grid. Number them in reading order: 1 top left, 2 top right, 3 bottom left, 4 bottom right.',
+  'manual.symbols.rule.2':
+    'Find the one column in the table below that contains all 4 symbols. A column reads from top to bottom, and exactly one column fits.',
+  'manual.symbols.rule.3':
+    'Tap the 4 symbols in the order they appear in that column, from top to bottom. Give the order as the numbers 1 to 4, for example 3, 1, 4, 2.',
+  'manual.symbols.rule.4':
+    'A wrong tap is a strike and the sequence starts again from the first symbol of the column. After the 4th right tap the module is solved.',
+
+  'manual.code.title': 'The code',
+  'manual.code.rule.1':
+    'The serial number has 6 characters, read from left to right. Give each one a value: a digit is worth itself, a letter is worth its place in the alphabet (A=1, B=2, C=3 ... Z=26).',
+  'manual.code.rule.2': 'Add up the 6 values. Call the total S.',
+  'manual.code.rule.3':
+    'The code has 4 digits. For digit number n (n = 1, 2, 3, 4): start from S, add n times the value of serial character number n, then add 3 times (n minus 1). The code digit is the last digit of the total.',
+  'manual.code.rule.4':
+    'Example: serial K7B3M9. Values: 11, 7, 2, 3, 13, 9, so S = 45.\nDigit 1: 45 + 1×11 + 0 = 56, so 6.\nDigit 2: 45 + 2×7 + 3 = 62, so 2.\nDigit 3: 45 + 3×2 + 6 = 57, so 7.\nDigit 4: 45 + 4×3 + 9 = 66, so 6.\nThe code is 6276.',
+  'manual.code.rule.5':
+    'The 4 digits are typed, then submitted. The keypad is like a phone: 1 2 3, then 4 5 6, then 7 8 9, then clear, 0, submit. A wrong code is a strike and wipes the digits. Clear erases what was typed.',
+
   'ui.mic.denied': 'Your microphone is off, so nobody can hear you. The game still works: use gestures and emotes.',
 };
 
@@ -106,6 +187,87 @@ export const fr: Record<string, string> = {
   'role.blind': 'Aveugle',
   'role.deaf': 'Sourd',
   'role.mute': 'Muet',
+
+  'color.red': 'rouge',
+  'color.blue': 'bleu',
+  'color.yellow': 'jaune',
+  'color.green': 'vert',
+  'color.white': 'blanc',
+
+  'emote.open': 'Emotes',
+  'emote.point': 'Regarde ici',
+  'emote.wave': 'Salut',
+  'emote.slap': 'Claque',
+  'emote.panic': 'Panique',
+  'emote.yes': 'Oui',
+  'emote.no': 'Non',
+
+  'glyph.flame': 'flamme',
+  'glyph.spiral': 'spirale',
+  'glyph.crab': 'crabe',
+  'glyph.hand': 'main',
+  'glyph.anchor': 'ancre',
+  'glyph.eye': 'œil',
+  'glyph.crown': 'couronne',
+  'glyph.moon': 'lune',
+  'glyph.key': 'clé',
+  'glyph.cloud': 'nuage',
+  'glyph.arrow': 'flèche',
+  'glyph.tree': 'arbre',
+  'glyph.shell': 'coquillage',
+  'glyph.leaf': 'feuille',
+  'glyph.gear': 'engrenage',
+  'glyph.bolt': 'éclair',
+  'glyph.drop': 'goutte',
+  'glyph.star': 'étoile',
+  'glyph.bell': 'cloche',
+  'glyph.wave': 'vague',
+
+  'manual.empty': 'Rien à lire pour le moment. Les pages du manuel apparaissent quand la partie démarre.',
+  'manual.prev': 'Page précédente',
+  'manual.next': 'Page suivante',
+  'manual.column': 'Colonne {n}',
+
+  'manual.wires.title': 'Fils',
+  'manual.wires.rule.3':
+    "3 fils. On compte les fils à partir du haut : le premier fil est celui du haut. Vérifie les lignes dans cet ordre et arrête-toi à la première qui s'applique :\n1. Aucun fil {red} : coupe le deuxième fil.\n2. Sinon, si le dernier fil est {white} : coupe le premier fil.\n3. Sinon, s'il y a plus d'un fil {blue} : coupe le dernier fil {blue}.\n4. Sinon : coupe le dernier fil.",
+  'manual.wires.rule.4':
+    "4 fils. On compte les fils à partir du haut : le premier fil est celui du haut. Vérifie les lignes dans cet ordre et arrête-toi à la première qui s'applique :\n1. Plus d'un fil {red} : coupe le dernier fil {red}.\n2. Sinon, si le dernier fil est {yellow} et qu'il n'y a aucun fil {red} : coupe le premier fil.\n3. Sinon, s'il y a exactement un fil {blue} : coupe ce fil {blue}.\n4. Sinon, s'il y a plus d'un fil {yellow} : coupe le dernier fil.\n5. Sinon : coupe le deuxième fil.",
+  'manual.wires.rule.5':
+    "5 fils. On compte les fils à partir du haut : le premier fil est celui du haut. Vérifie les lignes dans cet ordre et arrête-toi à la première qui s'applique :\n1. Si le dernier fil est {green} : coupe le quatrième fil.\n2. Sinon, s'il y a exactement un fil {red} et plus d'un fil {yellow} : coupe le premier fil.\n3. Sinon, s'il n'y a aucun fil {green} : coupe le deuxième fil.\n4. Sinon : coupe le premier fil.",
+  'manual.wires.rule.6':
+    "6 fils. On compte les fils à partir du haut : le premier fil est celui du haut. Vérifie les lignes dans cet ordre et arrête-toi à la première qui s'applique :\n1. Aucun fil {yellow} : coupe le troisième fil.\n2. Sinon, s'il y a exactement un fil {yellow} et plus d'un fil {white} : coupe le dernier fil {white}.\n3. Sinon, s'il n'y a aucun fil {white} : coupe le dernier fil.\n4. Sinon : coupe le quatrième fil.",
+
+  'manual.button.title': 'Le bouton',
+  'manual.button.rule.1':
+    "Regarde la couleur du bouton et le mot écrit dessus (HOLD, PRESS ou ABORT). Vérifie les lignes 1 à 5 dans l'ordre et arrête-toi à la première qui s'applique :\n1. Bouton {white} avec le mot ABORT : appui bref.",
+  'manual.button.rule.2': '2. Bouton {blue}, quel que soit le mot : appui long.',
+  'manual.button.rule.3': '3. Tout autre bouton avec le mot ABORT : appui long.',
+  'manual.button.rule.4': '4. Bouton {yellow} avec le mot PRESS : appui long.',
+  'manual.button.rule.5': '5. Tout le reste : appui bref.',
+  'manual.button.rule.6':
+    'Appui bref : touche le bouton et relâche tout de suite. Appui long : garde le doigt sur le bouton, puis relâche au moment où le dernier chiffre des secondes du minuteur est le chiffre du bouton (minuteur à 2:47 et chiffre 7 : relâche quand le minuteur affiche 7). Relâcher sur un autre chiffre compte comme une erreur.',
+
+  'manual.symbols.title': 'Symboles',
+  'manual.symbols.rule.1':
+    'Le module montre 4 symboles dans une grille 2 sur 2. Numérote-les dans le sens de lecture : 1 en haut à gauche, 2 en haut à droite, 3 en bas à gauche, 4 en bas à droite.',
+  'manual.symbols.rule.2':
+    "Trouve dans le tableau ci-dessous l'unique colonne qui contient les 4 symboles. Une colonne se lit de haut en bas, et une seule colonne convient.",
+  'manual.symbols.rule.3':
+    "Il faut taper les 4 symboles dans l'ordre où ils apparaissent dans cette colonne, de haut en bas. Donne l'ordre avec les numéros de 1 à 4, par exemple 3, 1, 4, 2.",
+  'manual.symbols.rule.4':
+    'Un mauvais appui compte comme une erreur et la séquence repart au premier symbole de la colonne. Après le 4e bon appui, le module est désamorcé.',
+
+  'manual.code.title': 'Le code',
+  'manual.code.rule.1':
+    "Le numéro de série a 6 caractères, lus de gauche à droite. Donne une valeur à chacun : un chiffre vaut lui-même, une lettre vaut sa place dans l'alphabet (A=1, B=2, C=3 ... Z=26).",
+  'manual.code.rule.2': 'Additionne les 6 valeurs. Appelle le total S.',
+  'manual.code.rule.3':
+    'Le code a 4 chiffres. Pour le chiffre numéro n (n = 1, 2, 3, 4) : pars de S, ajoute n fois la valeur du caractère numéro n du numéro de série, puis ajoute 3 fois (n moins 1). Le chiffre du code est le dernier chiffre du total.',
+  'manual.code.rule.4':
+    'Exemple : numéro de série K7B3M9. Valeurs : 11, 7, 2, 3, 13, 9, donc S = 45.\nChiffre 1 : 45 + 1×11 + 0 = 56, donc 6.\nChiffre 2 : 45 + 2×7 + 3 = 62, donc 2.\nChiffre 3 : 45 + 3×2 + 6 = 57, donc 7.\nChiffre 4 : 45 + 4×3 + 9 = 66, donc 6.\nLe code est 6276.',
+  'manual.code.rule.5':
+    "Les 4 chiffres sont tapés, puis validés. Le clavier ressemble à celui d'un téléphone : 1 2 3, puis 4 5 6, puis 7 8 9, puis effacer, 0, valider. Un mauvais code compte comme une erreur et efface les chiffres. Effacer supprime ce qui a été tapé.",
 
   'ui.mic.denied':
     "Ton micro est coupé : personne ne peut t'entendre. Le jeu fonctionne quand même, utilise les gestes et les emotes.",

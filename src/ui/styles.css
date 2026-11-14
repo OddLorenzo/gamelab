@@ -272,3 +272,179 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* manual scene (mute player) */
+
+.scene.manual {
+  max-width: 44rem;
+  gap: 0.75rem;
+}
+
+.manual-page {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.75rem;
+  touch-action: pan-y;
+}
+
+.manual-title {
+  margin: 0;
+  font-size: 1.6rem;
+  text-align: center;
+}
+
+.manual-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.manual-rule {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--card);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.manual-nav {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  background: var(--bg);
+}
+
+/* On a phone the emote toggle floats over the bottom-right corner: keep Next clear of it. */
+@media (max-width: 47rem) {
+  .manual-nav {
+    padding-right: 4.5rem;
+  }
+}
+
+.manual-nav-btn {
+  min-width: 64px;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.manual-indicator {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.symbol-columns {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 40rem) {
+  .symbol-columns {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.symbol-column {
+  padding: 0.5rem;
+  border: 2px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--card);
+}
+
+.symbol-column-title {
+  margin: 0 0 0.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.symbol-glyphs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.symbol-glyph {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+
+.glyph-char {
+  flex: 0 0 2.25rem;
+  font-family: 'Segoe UI Symbol', 'Noto Sans Symbols 2', 'Noto Sans Symbols', 'Apple Symbols', system-ui, sans-serif;
+  font-size: 1.75rem;
+  font-variant-emoji: text;
+  line-height: 1;
+  text-align: center;
+}
+
+.glyph-name {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* emote wheel */
+
+.emote-wheel {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 20;
+}
+
+.emote-toggle,
+.emote-btn {
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.emote-toggle[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+
+/* The ring sits on the middle of the screen so it fits a 375 px phone; each button is moved
+   onto the circle by its own --x / --y (see wheelPositions). */
+.emote-ring {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 21;
+  width: 0;
+  height: 0;
+}
+
+.emote-ring[hidden] {
+  display: none;
+}
+
+.emote-btn {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-color: var(--accent);
+  transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px)));
+}
