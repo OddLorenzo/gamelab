@@ -137,6 +137,9 @@ export const en: Record<string, string> = {
   'game.waiting': 'Getting your role...',
   'game.player': 'Player {n}',
   'game.emoteFrom': '{player}: {emote}',
+  'game.title': 'Monkey Bomb game',
+  'game.canvas.blind': 'Bomb touch area',
+  'game.canvas.deaf': 'Bomb display',
 
   'ui.mic.denied': 'Your microphone is off, so nobody can hear you. The game still works: use gestures and emotes.',
 };
@@ -276,6 +279,9 @@ export const fr: Record<string, string> = {
   'game.waiting': 'Attribution de ton rôle...',
   'game.player': 'Joueur {n}',
   'game.emoteFrom': '{player} : {emote}',
+  'game.title': 'Partie de Monkey Bomb',
+  'game.canvas.blind': 'Zone tactile de la bombe',
+  'game.canvas.deaf': 'Affichage de la bombe',
 
   'ui.mic.denied':
     "Ton micro est coupé : personne ne peut t'entendre. Le jeu fonctionne quand même, utilise les gestes et les emotes.",

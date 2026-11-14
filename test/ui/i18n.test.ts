@@ -35,6 +35,9 @@ const REQUIRED = [
   'game.waiting',
   'game.player',
   'game.emoteFrom',
+  'game.title',
+  'game.canvas.blind',
+  'game.canvas.deaf',
   ...SETTINGS,
 ];
 

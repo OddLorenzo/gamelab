@@ -321,13 +321,6 @@
   background: var(--bg);
 }
 
-/* On a phone the emote toggle floats over the bottom-right corner: keep Next clear of it. */
-@media (max-width: 47rem) {
-  .manual-nav {
-    padding-right: 4.5rem;
-  }
-}
-
 .manual-nav-btn {
   min-width: 64px;
   font-size: 1.5rem;
@@ -400,11 +393,10 @@
 
 /* emote wheel */
 
+/* The wheel lives in the game's control bar (see .game-bar), never floating over the bomb. */
 .emote-wheel {
-  position: fixed;
-  right: max(1rem, env(safe-area-inset-right));
-  bottom: max(1rem, env(safe-area-inset-bottom));
-  z-index: 20;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .emote-toggle,
@@ -451,7 +443,14 @@
 
 /* game scene */
 
+/* Why the control bar exists: the emote toggle used to float (position: fixed) over the bottom-right
+   corner of the bomb. On a 375x667 phone that corner is the keypad's submit key (levels 9-10 and every
+   stage-2 level), so the code module could not be solved and the deaf player lost that corner of the
+   bomb. Now the game is a column: the stage (canvas or manual) takes the rest, the bar below it holds
+   the mic-denied notice and the toggle. The canvas is sized from the stage, never from the viewport.
+   --bar-h is read by the tests: keep it at 3.5rem (56 px, the toggle's size) unless they say otherwise. */
 .scene.game {
+  --bar-h: 3.5rem;
   position: fixed;
   inset: 0;
   z-index: 10;
@@ -462,34 +461,46 @@
   height: 100dvh;
   min-height: 0;
   margin: 0;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
   overflow: hidden;
   background: var(--bg);
   color: var(--fg);
 }
 
-.game-banner {
-  flex: none;
-  padding: 0.3rem 0.6rem;
-  border-width: 1px;
-  border-radius: 0;
-  font-size: 0.78rem;
-  line-height: 1.25;
+/* focused on mount for screen readers, not a control: no ring */
+.scene.game:focus {
+  outline: none;
 }
 
 .game-stage {
   position: relative;
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
-/* the mute player reads: the manual scrolls inside the stage, the page itself never does */
-.scene.game[data-role='mute'] .game-stage {
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+.game-bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+  height: calc(var(--bar-h) + env(safe-area-inset-bottom));
+  padding: 0 0.5rem env(safe-area-inset-bottom);
+}
+
+.game-banner {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: 100%;
+  padding: 0.2rem 0.5rem;
+  overflow: hidden;
+  border-width: 1px;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-align: left;
 }
 
 .game-canvas {
@@ -512,17 +523,22 @@
   transform: translateY(-50%);
 }
 
+/* the mute player reads: the manual scrolls inside the stage, the page itself never does */
 .game-manual {
-  min-height: 100%;
+  position: absolute;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-/* bottom centre, clear of the emote toggle (56 px + 1 rem) on the right */
+/* top centre of the stage: the bottom of the bomb must stay free (see the bar note above) */
 .game-toast {
-  position: fixed;
-  bottom: max(1rem, env(safe-area-inset-bottom));
+  position: absolute;
+  top: 0.5rem;
   left: 50%;
   z-index: 15;
-  max-width: calc(100% - 12rem);
+  max-width: calc(100% - 1rem);
   padding: 0.4rem 0.9rem;
   border: 2px solid var(--line);
   border-radius: 999px;
@@ -533,8 +549,22 @@
   text-align: center;
   transform: translateX(-50%);
   pointer-events: none;
+  animation: toast-in 150ms ease-out;
 }
 
 .game-toast[hidden] {
   display: none;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -0.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-toast {
+    animation: none;
+  }
 }

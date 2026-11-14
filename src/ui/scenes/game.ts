@@ -43,6 +43,8 @@ export interface GameSceneDeps {
 const POINTER_MS = 50;
 const CLOCK_TICK_MS = 250;
 const TOAST_MS = 2000;
+/** A remote pointer dot nobody updated for this long is gone (its sender left or stopped touching). */
+const POINTER_TTL_MS = 1500;
 const MAX_DPR = 3;
 /** A room has 3 players; the bound only protects the maps from a host that invents ids. */
 const MAX_SENDERS = 8;
@@ -58,6 +60,8 @@ interface RoleUi {
 }
 
 interface Press {
+  /** The one pointer that owns this press: only its up / cancel / leave end it. */
+  pointerId: number;
   moduleId: string;
   slot: number;
   gesture: ButtonGesture | null;
@@ -67,6 +71,8 @@ interface Remote {
   x: number;
   y: number;
   color: string;
+  /** deps.now() of the last update. */
+  at: number;
 }
 
 export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: GameSceneDeps): Scene {
@@ -84,6 +90,8 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
   let ui: RoleUi | null = null;
   let lastKey = '';
   let toastTimer: unknown = null;
+  let liveTimer: unknown = null;
+  let sweepTimer: unknown = null;
 
   /** Order of first appearance: the label ("Player 2") and the pointer color of a peer. */
   const senders = new Map<PeerId, number>();
@@ -100,18 +108,22 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
   /* ------------------------------------------------ common DOM */
 
   const waiting = el('p', { cls: 'hint game-waiting', testid: 'game-waiting', text: t('game.waiting'), attrs: { role: 'status' } });
-  const stage = el('div', { cls: 'game-stage', testid: 'game-stage' }, [waiting]);
+  // The toast sits at the top of the stage: the bottom of the bomb (the keypad's submit key) must stay visible.
   const toast = el('div', { cls: 'game-toast', testid: 'game-toast', attrs: { 'aria-hidden': 'true' } });
   toast.hidden = true;
+  const stage = el('div', { cls: 'game-stage', testid: 'game-stage' }, [waiting, toast]);
   const live = el('div', { cls: 'sr-only', testid: 'game-live', attrs: { 'aria-live': 'polite' } });
   const banner =
     info.micTrack === null
       ? el('p', { cls: 'banner game-banner', testid: 'game-mic-denied', text: t('ui.mic.denied'), attrs: { role: 'status' } })
       : null;
-  const main = el('main', { cls: 'scene game', testid: 'game' }, [banner, stage, toast, live]);
+  // The control bar sits BELOW the stage (see the note in styles.css): nothing floats over the bomb.
+  const bar = el('div', { cls: 'game-bar', testid: 'game-bar' }, [banner]);
+  const main = el('main', { cls: 'scene game', testid: 'game', attrs: { 'aria-label': t('game.title'), tabindex: '-1' } }, [stage, bar, live]);
   root.replaceChildren(main);
+  main.focus({ preventScroll: true });
 
-  const wheel = createEmoteWheel(main, {
+  const wheel = createEmoteWheel(bar, {
     onPick: (id) => {
       if (alive) game.sendEmote(id);
     },
@@ -124,7 +136,12 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
   /* ------------------------------------------------ canvas roles (blind, deaf) */
 
   function mountCanvas(r: 'blind' | 'deaf'): RoleUi {
-    const canvas = el('canvas', { cls: 'game-canvas', testid: 'game-canvas' });
+    // The label says what the area is for and nothing about the bomb itself.
+    const canvas = el('canvas', {
+      cls: 'game-canvas',
+      testid: 'game-canvas',
+      attrs: { role: 'img', 'aria-label': t(r === 'blind' ? 'game.canvas.blind' : 'game.canvas.deaf') },
+    });
     canvas.style.touchAction = 'none';
     if (r === 'blind') canvas.setAttribute('data-no-longpress', '');
     stage.append(canvas);
@@ -139,7 +156,7 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
     let queued = false;
     let frame: unknown = null;
     let lastClock = '';
-    const presses = new Map<number, Press>();
+    let active: Press | null = null;
     const throttle = createThrottle(POINTER_MS, deps.now);
 
     const clockOf = (ms: number | null): string => (ms === null ? '' : formatClock(ms));
@@ -174,8 +191,7 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
       if (ctx === null) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (view.role === 'blind') {
-        const last = [...presses.values()].pop();
-        const pressedSlot: PressedSlot | null = last === undefined ? null : { moduleId: last.moduleId, slot: last.slot };
+        const pressedSlot: PressedSlot | null = active === null ? null : { moduleId: active.moduleId, slot: active.slot };
         drawBlind(ctx, cssW, cssH, layout, { strikesLeft: view.strikesLeft, pressedSlot });
       } else {
         const ms = game.msLeft();
@@ -220,10 +236,15 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
         game.sendPointer(p.x, p.y);
       });
     };
-    const endPress = (id: number, how: 'up' | 'cancel'): void => {
-      const press = presses.get(id);
-      if (press === undefined) return;
-      presses.delete(id);
+    const sendNow = (ev: PointerEvent): void => {
+      if (ev.isPrimary === false) return;
+      const p = pointOf(ev);
+      game.sendPointer(p.x, p.y);
+    };
+    const endActive = (how: 'up' | 'cancel'): void => {
+      const press = active;
+      if (press === null) return;
+      active = null;
       if (press.gesture !== null) {
         if (how === 'up') press.gesture.up();
         else press.gesture.cancel();
@@ -235,6 +256,8 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
       if (!alive) return;
       const p = pointOf(ev);
       share(ev, p);
+      // Only the main button of the primary pointer acts: a right click or a second finger is no tap.
+      if (ev.isPrimary === false || ev.button !== 0) return;
       if (typeof canvas.setPointerCapture === 'function') {
         try {
           canvas.setPointerCapture(ev.pointerId);
@@ -243,11 +266,12 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
         }
       }
       if (r !== 'blind') return;
+      // A new primary press means the earlier one lost its up / cancel (the pointer was lost): end it first.
+      endActive('cancel');
       const target = hitTest(hit, p);
       if (target === null) return;
       const module = layout.find((m) => m.moduleId === target.moduleId);
       if (module === undefined) return;
-      endPress(ev.pointerId, 'cancel');
       const { moduleId, slot } = target;
       if (module.kind === 'button') {
         const gesture = new ButtonGesture({
@@ -257,12 +281,12 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
           setTimeout: setTimer,
           clearTimeout: clearTimer,
         });
-        presses.set(ev.pointerId, { moduleId, slot, gesture });
+        active = { pointerId: ev.pointerId, moduleId, slot, gesture };
         gesture.down();
       } else {
         const action = slotAction(module.kind, slot);
         if (action === null) return;
-        presses.set(ev.pointerId, { moduleId, slot, gesture: null });
+        active = { pointerId: ev.pointerId, moduleId, slot, gesture: null };
         game.act(moduleId, action);
       }
       invalidate();
@@ -271,10 +295,12 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
       if (alive) share(ev, pointOf(ev));
     };
     const onUp = (ev: PointerEvent): void => {
-      if (alive) endPress(ev.pointerId, 'up');
+      if (!alive) return;
+      sendNow(ev); // the last resting position is exact, whatever the throttle dropped
+      if (active?.pointerId === ev.pointerId) endActive('up');
     };
     const onCancel = (ev: PointerEvent): void => {
-      if (alive) endPress(ev.pointerId, 'cancel');
+      if (alive && active?.pointerId === ev.pointerId) endActive('cancel');
     };
     const onContextMenu = (ev: Event): void => {
       ev.preventDefault(); // a long hold on the button must not open a menu
@@ -303,8 +329,8 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
         if (tick !== null) clearTick(tick);
         observer?.disconnect();
         window.removeEventListener('resize', onResize);
-        for (const press of presses.values()) press.gesture?.destroy();
-        presses.clear();
+        active?.gesture?.destroy();
+        active = null;
         canvas.remove();
       },
     };
@@ -339,6 +365,9 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
 
   /* ------------------------------------------------ game callbacks (they cannot be unregistered) */
 
+  // A guest's scene is built when its role arrives, before the first view: its voice rules apply from now on.
+  if (game.role !== null) deps.voice.setRole(game.role);
+
   game.onView((view) => {
     if (!alive) return;
     if (view.role !== role) {
@@ -346,7 +375,7 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
       role = view.role;
       remotes.clear();
       lastKey = '';
-      stage.replaceChildren();
+      stage.replaceChildren(toast);
       main.dataset.role = view.role;
       ui = view.role === 'mute' ? mountMute() : mountCanvas(view.role);
       deps.voice.setRole(view.role);
@@ -358,11 +387,30 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
     ui?.apply(view);
   });
 
+  /** Drops the dots nobody updated for POINTER_TTL_MS, then waits for the next one to expire. */
+  function sweepRemotes(): void {
+    sweepTimer = null;
+    if (!alive) return;
+    const t = deps.now();
+    let wait = Number.POSITIVE_INFINITY;
+    let dropped = false;
+    for (const [id, r] of remotes) {
+      const left = r.at + POINTER_TTL_MS - t;
+      if (left <= 0) {
+        remotes.delete(id);
+        dropped = true;
+      } else wait = Math.min(wait, left);
+    }
+    if (dropped) ui?.invalidate();
+    if (remotes.size > 0) sweepTimer = setTimer(sweepRemotes, wait);
+  }
+
   game.onPointer((by, x, y) => {
     if (!alive || by === info.conn.id) return;
     const index = senderIndex(by);
     if (index === null || (role !== 'blind' && role !== 'deaf')) return;
-    remotes.set(by, { x, y, color: POINTER_COLORS[index % POINTER_COLORS.length] });
+    remotes.set(by, { x, y, color: POINTER_COLORS[index % POINTER_COLORS.length], at: deps.now() });
+    sweepTimer ??= setTimer(sweepRemotes, POINTER_TTL_MS);
     ui?.invalidate();
   });
 
@@ -373,7 +421,13 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
       player: t('game.player', { n: index === null ? '?' : index + 1 }),
       emote: t(`emote.${id}`),
     });
-    live.textContent = text;
+    // Clear first and write on the next task: an identical repeated emote is announced again.
+    live.textContent = '';
+    if (liveTimer !== null) clearTimer(liveTimer);
+    liveTimer = setTimer(() => {
+      liveTimer = null;
+      live.textContent = text;
+    }, 0);
     toast.textContent = text;
     toast.hidden = false;
     if (toastTimer !== null) clearTimer(toastTimer);
@@ -391,6 +445,10 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
     wheel.destroy();
     if (toastTimer !== null) clearTimer(toastTimer);
     toastTimer = null;
+    if (liveTimer !== null) clearTimer(liveTimer);
+    liveTimer = null;
+    if (sweepTimer !== null) clearTimer(sweepTimer);
+    sweepTimer = null;
     main.remove();
   }
 
