@@ -60,6 +60,7 @@
     ul { padding-left: 1.25rem; }
     li { margin: 0.25rem 0; }
     .date { color: var(--muted); font-size: 0.9rem; }
+    code { font-family: ui-monospace, Consolas, monospace; font-size: 0.9em; }
     .back { display: inline-flex; align-items: center; min-height: 44px; }
   </style>
 </head>
@@ -76,7 +77,7 @@
       <p>Monkey Bomb is a game for three players who talk to each other to defuse a bomb. This page says what the game does with your data. It is short because there is little to tell.</p>
 
       <h2>Microphone</h2>
-      <p>The game asks for your <strong>microphone</strong> only, so that the three players of a game can talk to each other. Voice audio goes directly between the three players' devices (peer to peer). The game does not record it, does not store it and does not send it to any server of the game. The game does not use the camera.</p>
+      <p>The game asks for your <strong>microphone</strong> only, so that the three players of a game can talk to each other. Voice audio goes directly between the three players' devices (peer to peer). The game does not record it, does not store it and does not send it to any server of the game, except through an encrypted relay when a direct connection is impossible (see below). The game does not use the camera.</p>
 
       <h2>What stays on your device</h2>
       <p>Only your chosen language and the levels and stars you unlocked, in your browser's local storage. Nothing from it is sent anywhere. Clearing the site data in your browser erases it.</p>
@@ -85,7 +86,8 @@
       <p>There is no account or sign-in, no analytics, no tracker and no advertising. This page loads no external fonts or scripts.</p>
 
       <h2>Connecting the players</h2>
-      <p>To put the three players in contact, the game uses a small service (a Cloudflare Worker). To do this it sees the 4-letter room code, a temporary connection identifier and your IP address. It uses them only for the time needed to connect the players and to limit abuse, and does not keep them as a record of who played.</p>
+      <p>To put the three players in contact, the game uses a small service (a Cloudflare Worker). To do this it sees the 4-letter room code, a temporary connection identifier and your IP address. It uses them only to connect the players and to limit abuse. The game does not store your IP address: the request counter that limits abuse (used only for the relay-credential request) keeps a start time and a count under an identifier derived from the IP address, for about one minute. The room itself (a creation timestamp under the room code) is deleted a few minutes at most (10) after the room empties, or after it was created if nobody joined. Neither is used for anything else.</p>
+      <p>With a direct (peer-to-peer) connection, the other players in the room can see your IP address, which is how a direct connection works; the connection setup messages between devices also pass through the game's Worker. When the game cannot get relay credentials from its own server, your browser falls back to public STUN servers run by Cloudflare (<code>stun.cloudflare.com</code>) and Google (<code>stun.l.google.com</code>), which see your public IP address when your browser asks them for connection candidates. The site and the Worker are hosted by Cloudflare, which may keep ordinary network or request logs outside the game's control.</p>
       <p>When a direct connection between two devices is impossible (some networks and mobile data), a relay server (TURN) may carry the traffic between them. This traffic is encrypted (WebRTC encrypts audio and game data), so the relay cannot listen to it. The relay sees, as any network does, that two addresses exchange data.</p>
 
       <h2>Taking back the microphone permission</h2>
@@ -109,7 +111,7 @@
       <p>Monkey Bomb est un jeu pour trois joueurs qui se parlent pour désamorcer une bombe. Cette page explique ce que le jeu fait de vos données. Elle est courte, car il y a peu à dire.</p>
 
       <h2>Microphone</h2>
-      <p>Le jeu demande uniquement votre <strong>microphone</strong>, pour que les trois joueurs d'une partie puissent se parler. La voix circule directement entre les appareils des trois joueurs (pair à pair). Le jeu ne l'enregistre pas, ne la conserve pas et ne l'envoie à aucun serveur du jeu. Le jeu n'utilise pas la caméra.</p>
+      <p>Le jeu demande uniquement votre <strong>microphone</strong>, pour que les trois joueurs d'une partie puissent se parler. La voix circule directement entre les appareils des trois joueurs (pair à pair). Le jeu ne l'enregistre pas, ne la conserve pas et ne l'envoie à aucun serveur du jeu, sauf via un relais chiffré quand une connexion directe est impossible (voir plus bas). Le jeu n'utilise pas la caméra.</p>
 
       <h2>Ce qui reste sur votre appareil</h2>
       <p>Seulement la langue choisie et les niveaux et étoiles débloqués, dans le stockage local de votre navigateur. Rien de tout cela n'est envoyé. Effacer les données du site dans votre navigateur les supprime.</p>
@@ -118,7 +120,8 @@
       <p>Il n'y a ni compte ni connexion, ni outil de statistiques, ni traceur, ni publicité. Cette page ne charge aucune police ni aucun script externe.</p>
 
       <h2>Mise en relation des joueurs</h2>
-      <p>Pour mettre les trois joueurs en contact, le jeu utilise un petit service (un Cloudflare Worker). Il voit pour cela le code de salle à 4 lettres, un identifiant de connexion temporaire et votre adresse IP. Il les utilise seulement le temps de connecter les joueurs et de limiter les abus, et ne les conserve pas comme historique des joueurs.</p>
+      <p>Pour mettre les trois joueurs en contact, le jeu utilise un petit service (un Cloudflare Worker). Il voit pour cela le code de salle à 4 lettres, un identifiant de connexion temporaire et votre adresse IP. Il les utilise seulement pour connecter les joueurs et limiter les abus. Le jeu ne stocke pas votre adresse IP : le compteur de requêtes qui limite les abus (utilisé uniquement pour la demande d'identifiants du relais) garde une heure de début et un nombre, sous un identifiant dérivé de l'adresse IP, pendant environ une minute. La salle elle-même (un horodatage de création sous le code de salle) est supprimée au plus quelques minutes (10) après que la salle s'est vidée, ou après sa création si personne ne l'a rejointe. Ni l'un ni l'autre ne sert à autre chose.</p>
+      <p>Avec une connexion directe (pair à pair), les autres joueurs de la salle peuvent voir votre adresse IP, c'est ainsi que fonctionne une connexion directe ; les messages de mise en place de la connexion entre appareils passent aussi par le Worker du jeu. Quand le jeu ne peut pas obtenir d'identifiants de relais auprès de son propre serveur, votre navigateur se rabat sur des serveurs STUN publics de Cloudflare (<code>stun.cloudflare.com</code>) et de Google (<code>stun.l.google.com</code>), qui voient votre adresse IP publique quand votre navigateur leur demande des candidats de connexion. Le site et le Worker sont hébergés par Cloudflare, qui peut conserver des journaux réseau ou de requêtes ordinaires, hors du contrôle du jeu.</p>
       <p>Quand une connexion directe entre deux appareils est impossible (certains réseaux et les données mobiles), un serveur relais (TURN) peut transporter les échanges entre eux. Ces échanges sont chiffrés (WebRTC chiffre l'audio et les données de jeu) : le relais ne peut pas les écouter. Le relais voit, comme tout réseau, que deux adresses échangent des données.</p>
 
       <h2>Retirer l'autorisation du microphone</h2>

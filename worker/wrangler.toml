@@ -7,6 +7,7 @@ compatibility_date = "2026-08-15"
 # This default is for local development and `vite preview` only. The owner sets the production
 # value before deploying: the Pages domain of the site, plus `capacitor://localhost` and
 # `https://localhost` once the store apps exist (e.g. `wrangler deploy --var ALLOWED_ORIGINS:...`).
+# A plain `wrangler deploy` resets the value to THIS list: pass --var on every production deploy.
 # Do not commit a real domain or any secret here.
 [vars]
 ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173"

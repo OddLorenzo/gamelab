@@ -42,6 +42,14 @@ The answer must contain an entry whose `urls` start with `turn:` or `turns:`. If
 npx wrangler deploy --var ALLOWED_ORIGINS:https://<pages-domain>
 ```
 
+In PowerShell a list with commas must be quoted, or PowerShell splits it into an array:
+
+```
+npx wrangler deploy --var "ALLOWED_ORIGINS:https://<pages-domain>,capacitor://localhost,https://localhost"
+```
+
+WARNING: a plain `npx wrangler deploy` WITHOUT `--var ALLOWED_ORIGINS:...` resets the value to the localhost-only list in `wrangler.toml`, and production then fails closed (403 `origin-not-allowed` for every browser). Rule: ALWAYS pass `--var` on every production deploy (the repo keeps no real domain). If you prefer a plain `wrangler deploy`, put the production list in the `ALLOWED_ORIGINS` line under `[vars]` in your local copy instead and do not commit it.
+
 Exact origins only (scheme, host, port; no path, no trailing slash, no `*`). Empty or missing means no browser is allowed.
 
 `compatibility_date` in `wrangler.toml` is pinned on purpose. Bump it deliberately, run `npm test` in `worker/`, then deploy.
@@ -57,20 +65,27 @@ Note the printed URL (`https://monkey-bomb-signal.<account>.workers.dev`).
 
 ## e) Build and deploy the site
 
+`VITE_WORKER_URL` is REQUIRED at build time. If it is missing, the production site silently calls `http://localhost:8787` and nothing works.
+
 From `game-lab/monkey-bomb`:
 
 ```
 VITE_WORKER_URL=https://<worker-url> VITE_APP_VERSION=v0 npm run build
+npm run check:release
 npx wrangler pages deploy dist --project-name <name>
 ```
+
+`npm run check:release` is the last step before `pages deploy`. It exits non-zero if `dist/privacy.html` still contains `OWNER_EMAIL` or if the built JS contains `localhost:8787`. Do not deploy while it fails.
 
 (Windows PowerShell: set `$env:VITE_WORKER_URL = "https://<worker-url>"` first. You can also put the values in `.env.local`, which is git-ignored; see `.env.example`. Or upload `dist/` in the Pages dashboard.)
 
 Then add the Pages origin (`https://<name>.pages.dev` or your custom domain) to `ALLOWED_ORIGINS` and redeploy the Worker (step c, d). Until then the browser gets 403 `origin-not-allowed`.
 
+`wrangler pages deploy` also prints a per-deployment URL like `https://<hash>.<name>.pages.dev`. That origin is NOT in `ALLOWED_ORIGINS`, so the game opened there gets 403. Smoke-test on the production alias (`https://<name>.pages.dev`) or your custom domain, or add that exact origin for the test.
+
 ## f) Privacy page
 
-Replace the two `OWNER_EMAIL` placeholders in `public/privacy.html` with a real contact address, then rebuild and redeploy the site (step e). Do not publish with the placeholder.
+Replace EVERY occurrence of `OWNER_EMAIL` in `public/privacy.html` (four: an `href` and a visible text in each of the English and French sections) with a real contact address, then rebuild and redeploy the site (step e). `npm run check:release` fails while any is left.
 
 ## g) Live smoke test
 
