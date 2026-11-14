@@ -6,7 +6,7 @@ import { VoiceGate } from '../net/voice';
 /** The part of HTMLAudioElement the session uses, so tests can pass a recording fake. */
 export interface HTMLAudioElementLike {
   muted: boolean;
-  srcObject: MediaStream | null;
+  srcObject: MediaProvider | null;
   play(): Promise<void> | void;
   pause(): void;
 }

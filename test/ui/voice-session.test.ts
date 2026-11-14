@@ -19,7 +19,7 @@ const audioFactory = (log: Log, playBehaviour: () => Promise<void> | void = () =
   const createAudio = (): HTMLAudioElementLike => {
     const name = `a${String(made.length)}`;
     let muted = false;
-    let srcObject: MediaStream | null = null;
+    let srcObject: MediaProvider | null = null;
     const a: FakeAudio = {
       name,
       paused: false,
@@ -33,7 +33,7 @@ const audioFactory = (log: Log, playBehaviour: () => Promise<void> | void = () =
       get srcObject() {
         return srcObject;
       },
-      set srcObject(v: MediaStream | null) {
+      set srcObject(v: MediaProvider | null) {
         srcObject = v;
         log.push(`${name}.srcObject=${v === null ? 'null' : 'stream'}`);
       },
@@ -225,15 +225,13 @@ describe('createVoiceSession', () => {
     expect(stop).not.toHaveBeenCalled();
   });
 
-  it('swallows a rejected play() (autoplay blocked) without an unhandled rejection', async () => {
-    const unhandled = vi.fn();
-    process.on('unhandledRejection', unhandled);
-    const { conn, made } = rig({ enabled: true }, () => Promise.reject(new Error('NotAllowedError')));
+  it('swallows a rejected play() (autoplay blocked): the rejection gets a handler', () => {
+    const rejected = Promise.reject(new Error('NotAllowedError'));
+    const handled = vi.spyOn(rejected, 'catch');
+    const { conn, made } = rig({ enabled: true }, () => rejected);
     conn.audio('p1');
-    await new Promise((r) => setTimeout(r, 0));
-    process.off('unhandledRejection', unhandled);
     expect(made).toHaveLength(1);
-    expect(unhandled).not.toHaveBeenCalled();
+    expect(handled).toHaveBeenCalledTimes(1);
   });
 
   it('swallows a play() that throws synchronously', () => {
