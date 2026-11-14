@@ -15,7 +15,10 @@ export interface RoomConnection extends Transport {
   close(): void;
 }
 
-/** The host is the lowest PeerId in the room, this peer included. */
+/**
+ * The host is the lowest PeerId in the room, this peer included. Only meaningful once all three
+ * channels are open: with a partial peer list another guest could look like the lowest id.
+ */
 export function hostIdOf(t: Transport): PeerId {
   return [t.id, ...t.peers()].sort()[0];
 }

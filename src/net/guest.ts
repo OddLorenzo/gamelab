@@ -7,26 +7,30 @@ import type { Transport } from './transport';
 
 const WATCHDOG_MS = 1000;
 const HOST_SILENCE_MS = 10_000;
+const WAKE_GAP_MS = 3000;
 
 /**
  * A non-host player. Trusts only the host (the lowest PeerId), validates every frame, and
  * never reads the host clock: the timer is the last view's msLeft minus the time elapsed on
  * THIS device since that view arrived, so a backgrounded tab recovers on the next message.
  *
- * Construct it once the room is complete (the host id is read from the peers at that moment)
- * and register callbacks before the host starts: nothing is replayed.
+ * Build it only after all three data channels are open (the lobby waits for `peers().length === 2`):
+ * the host id is the lowest of the three ids and is fixed here, so a guest built with a partial
+ * peer list would pick another guest as host. The constructor throws otherwise. Register callbacks
+ * before the host starts: nothing is replayed.
  */
 export class GuestGame implements Participant {
   private readonly hostId: PeerId;
   private lastSeq = 0;
   private lastLeft: number | null = null; // deaf msLeft of the last accepted view
   private lastViewAt = 0; // guest clock when that view arrived
-  private lastHostMsgAt: number;
+  private lastHostMsgAt = 0;
+  private lastCheckAt = 0;
   private roleValue: Role | null = null;
   private levelValue: LevelDef | null = null;
   private ended = false;
   private stopped = false;
-  private watchdog: ReturnType<typeof setInterval> | null;
+  private watchdog: ReturnType<typeof setInterval> | null = null;
   private rolesCbs: ((role: Role, level: LevelDef) => void)[] = [];
   private viewCbs: ((v: RoleView, msLeft: number | null) => void)[] = [];
   private endedCbs: ((r: EndReason, stats?: EndStats) => void)[] = [];
@@ -37,14 +41,30 @@ export class GuestGame implements Participant {
     private readonly t: Transport,
     private readonly now: () => number,
   ) {
+    const peerCount = t.peers().length;
+    if (peerCount !== 2) throw new Error(`GuestGame needs both other players connected, got ${peerCount}`);
     this.hostId = hostIdOf(t);
-    this.lastHostMsgAt = now();
+    if (this.hostId === t.id) throw new Error('GuestGame cannot run on the host peer');
     t.onMessage((from, msg) => this.onMessage(from, msg));
     t.onPeerLeft((id) => {
       if (id === this.hostId) this.finish('host-left');
     });
+  }
+
+  /** Armed by the first valid host message: the host says nothing while it waits in the lobby. */
+  private armWatchdog(): void {
+    if (this.watchdog !== null) return;
+    this.lastCheckAt = this.now();
     this.watchdog = globalThis.setInterval(() => {
-      if (this.now() - this.lastHostMsgAt >= HOST_SILENCE_MS) this.finish('host-left');
+      const at = this.now();
+      const gap = at - this.lastCheckAt;
+      this.lastCheckAt = at;
+      if (gap > WAKE_GAP_MS) {
+        // this tab was frozen: the queued host frames have not been delivered yet, give them a fresh window
+        this.lastHostMsgAt = at;
+        return;
+      }
+      if (at - this.lastHostMsgAt >= HOST_SILENCE_MS) this.finish('host-left');
     }, WATCHDOG_MS);
   }
 
@@ -99,7 +119,11 @@ export class GuestGame implements Participant {
 
   private toHost(msg: NetMsg): void {
     if (this.ended || this.stopped) return;
-    this.t.send(this.hostId, msg);
+    try {
+      this.t.send(this.hostId, msg);
+    } catch {
+      // a failed send must not break the UI; the action is simply lost
+    }
   }
 
   private clearWatchdog(): void {
@@ -119,6 +143,7 @@ export class GuestGame implements Participant {
     const msg = parseNetMsg(raw);
     if (msg === null) return;
     this.lastHostMsgAt = this.now(); // any valid host message proves the host is alive
+    this.armWatchdog();
     switch (msg.t) {
       case 'roles': {
         const role = msg.assign[this.t.id];

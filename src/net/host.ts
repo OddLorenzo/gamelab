@@ -100,15 +100,16 @@ export class HostGame implements Participant {
     this.guests = guests;
     this.assign = assignRoles([this.t.id, ...guests], this.rng);
     this.localRole = this.assign[this.t.id];
-    this.session = createSession(this.def);
+    // The level id (sent to guests) determines buildLevel(id).seed, so a guest could rebuild the
+    // bomb from it. The host therefore salts the session seed from its private rng.
+    this.session = createSession({ ...this.def, seed: this.rng.int(2 ** 31) });
     this.lastTickAt = this.now();
 
     this.t.onMessage((from, msg) => this.onMessage(from, msg));
     this.t.onPeerLeft((id) => this.onPeerLeft(id));
 
-    // The seed would let a client rebuild the whole bomb: guests get the level without it.
-    const level: LevelDef = { ...this.def, seed: 0 };
-    for (const g of this.guests) this.send(g, { t: 'roles', assign: this.assign, level });
+    // The real seed never goes on the wire (and the session seed is salted anyway, see above).
+    this.sendRoles();
     this.publish();
 
     this.tickTimer = globalThis.setInterval(() => this.step(), TICK_MS);
@@ -143,7 +144,11 @@ export class HostGame implements Participant {
   }
 
   private send(to: PeerId, msg: NetMsg): void {
-    this.t.send(to, msg);
+    try {
+      this.t.send(to, msg);
+    } catch {
+      // one failed send (a full channel queue) must not abort the other sends or the callbacks
+    }
   }
 
   private clearTimers(): void {
@@ -157,7 +162,7 @@ export class HostGame implements Participant {
   private advance(): void {
     const at = this.now();
     const dtMs = at - this.lastTickAt;
-    this.lastTickAt = at;
+    if (dtMs > 0) this.lastTickAt = at; // a clock that stepped back must not refund time later
     if (this.session !== null) this.session = reduce(this.session, { type: 'tick', dtMs });
   }
 
@@ -167,9 +172,24 @@ export class HostGame implements Participant {
     this.publish();
   }
 
+  private sendRoles(): void {
+    const level: LevelDef = { ...this.def, seed: 0 };
+    for (const g of this.guests) this.send(g, { t: 'roles', assign: this.assign, level });
+  }
+
+  /**
+   * Frames sent before a data channel is open are dropped, and views are only sent on change.
+   * So every heartbeat also repeats `roles` (a guest ignores repeats) and forgets what each
+   * guest was sent, which re-sends its current full view.
+   */
   private heartbeat(): void {
     if (!this.running()) return;
-    for (const g of this.guests) this.send(g, { t: 'heartbeat', hostTimeMs: this.now() });
+    this.sendRoles();
+    for (const g of this.guests) {
+      this.send(g, { t: 'heartbeat', hostTimeMs: this.now() });
+      this.lastJson.delete(g);
+    }
+    this.publish();
   }
 
   private onMessage(from: PeerId, raw: NetMsg): void {
@@ -247,7 +267,7 @@ export class HostGame implements Participant {
     if ((reason === 'won' || reason === 'lost') && this.session !== null) {
       stats = {
         strikesLeft: this.session.strikesLeft,
-        msLeftRatio: clamp01(this.session.msLeft / this.def.timeMs),
+        msLeftRatio: this.def.timeMs > 0 ? clamp01(this.session.msLeft / this.def.timeMs) : 0,
       };
     }
     const msg: NetMsg = stats === undefined ? { t: 'ended', reason } : { t: 'ended', reason, stats };

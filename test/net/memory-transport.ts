@@ -15,6 +15,8 @@ export interface MemoryNetwork extends Array<Transport> {
   hold(id: PeerId): void;
   /** Stop holding and deliver the queued messages in order. */
   flush(id: PeerId): void;
+  /** Stop holding and DROP whatever was queued for `id` (frames lost before a channel opened). */
+  discard(id: PeerId): void;
   /** Number of messages currently queued for `id`. */
   queued(id: PeerId): number;
 }
@@ -88,6 +90,12 @@ export function createMemoryNetwork(ids: PeerId[]): MemoryNetwork {
       const next = node.queue.shift()!;
       deliver(node, next.from, next.json);
     }
+  };
+  net.discard = (id) => {
+    const node = nodes.get(id);
+    if (node === undefined) return;
+    node.holding = false;
+    node.queue = [];
   };
   net.queued = (id) => nodes.get(id)?.queue.length ?? 0;
   return net;

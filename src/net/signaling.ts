@@ -254,7 +254,12 @@ class RoomMesh implements RoomConnection {
 
   send(to: PeerId, msg: NetMsg): void {
     const ch = this.links.get(to)?.channel;
-    if (ch?.readyState === 'open') ch.send(JSON.stringify(msg));
+    if (ch?.readyState !== 'open') return;
+    try {
+      ch.send(JSON.stringify(msg));
+    } catch {
+      // RTCDataChannel.send throws when its queue is full: drop the frame, never abort the caller
+    }
   }
 
   onMessage(cb: (from: PeerId, msg: NetMsg) => void): void {

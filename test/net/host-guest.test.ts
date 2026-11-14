@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODULES, createSession } from '../../src/core/bomb';
 import type { LevelDef, Session } from '../../src/core/bomb';
 import { createRng } from '../../src/core/rng';
+import { buildLevel } from '../../src/core/levels';
 import { needsHold } from '../../src/core/modules/button';
 import { SYMBOL_COLUMNS } from '../../src/core/modules/symbols';
 import { projectView } from '../../src/core/views';
@@ -116,8 +117,9 @@ function makeRig(o: RigOptions = {}): Rig {
   };
 }
 
-const solveAll = (level: LevelDef): { moduleId: string; action: ModuleAction }[] =>
-  createSession(level).modules.flatMap((m) =>
+/** Winning actions for the host's ACTUAL modules (its session seed is salted, so the level def cannot predict them). */
+const solveAll = (src: Rig | Session): { moduleId: string; action: ModuleAction }[] =>
+  ('snap' in src ? src.snap() : src).modules.flatMap((m) =>
     MODULES[m.kind].solve(m).map((action) => ({ moduleId: m.id, action })),
   );
 
@@ -189,10 +191,10 @@ describe('no cross-role leaks', () => {
   it('each guest only receives its own role view, with no other role data (20 levels)', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const level = def({ seed: seed * 101 });
-      const secret = createSession(level);
+      const rig = makeRig({ level, rngSeed: seed });
+      const secret = rig.snap();
       const serial = secret.modules[3].data['serial'] as string;
       const target = secret.modules[3].data['target'] as string;
-      const rig = makeRig({ level, rngSeed: seed });
       vi.advanceTimersByTime(2000);
       for (const id of IDS.slice(1)) {
         const role = rig.assign[id];
@@ -229,7 +231,7 @@ describe('no cross-role leaks', () => {
 });
 
 describe('act handling', () => {
-  const solveWires = (rig: Rig) => solveAll(rig.level)[0];
+  const solveWires = (rig: Rig) => solveAll(rig)[0];
 
   it('an act from the deaf peer leaves the session unchanged; the same act from the blind peer applies', () => {
     const rig = makeRig({ level: def({ moduleKinds: ['wires', 'code'] }) });
@@ -339,7 +341,7 @@ describe('untrusted input', () => {
     host.start();
     const stranger = net[3];
     const before = json(host.snapshot());
-    const { moduleId, action } = solveAll(level)[0];
+    const { moduleId, action } = solveAll(host.snapshot()!)[0];
     const receivedByGuests: NetMsg[] = [];
     net[1].onMessage((_f, m) => receivedByGuests.push(m));
     net[2].onMessage((_f, m) => receivedByGuests.push(m));
@@ -369,22 +371,28 @@ describe('untrusted input', () => {
     expect(rig.rec[a].emotes).toEqual([]);
     expect(rig.guests[a].role).toBe(roleBefore);
     // a spoofed seq must not poison the real host's later views
-    rig.guests[rig.peerOf('blind')].sendAct('m0', solveAll(rig.level)[0].action);
+    rig.guests[rig.peerOf('blind')].sendAct('m0', solveAll(rig)[0].action);
     expect(rig.rec[a].ended.map((e) => e.reason)).toEqual(['won']);
     expect(last(rig.rec[a].views).view.status).toBe('won');
   });
 });
 
 describe('R1: the host owns the button timer digit', () => {
-  const holdSeed = (() => {
-    for (let seed = 1; seed < 500; seed++) {
-      const m = createSession(def({ moduleKinds: ['button'], seed })).modules[0];
-      if (needsHold(m.data['color'] as never, m.data['label'] as never)) return seed;
+  const level = def({ moduleKinds: ['button'], timeMs: 100_000 });
+  /** A rig whose (salted) host session holds a button that needs hold-and-release. */
+  const holdRig = (hostBlind: boolean): { rig: Rig; digitOf: number } => {
+    for (let seed = 1; seed < 3000; seed++) {
+      if ((assignRoles(IDS, createRng(seed))[HOST] === 'blind') !== hostBlind) continue;
+      const rig = makeRig({ level, rngSeed: seed });
+      const m = rig.snap().modules[0];
+      if (needsHold(m.data['color'] as never, m.data['label'] as never)) {
+        return { rig, digitOf: m.data['digit'] as number };
+      }
+      rig.host.stop();
+      for (const g of Object.values(rig.guests)) g.stop();
     }
-    throw new Error('no hold seed');
-  })();
-  const level = def({ moduleKinds: ['button'], seed: holdSeed, timeMs: 100_000 });
-  const digitOf = createSession(level).modules[0].data['digit'] as number;
+    throw new Error('no hold rig');
+  };
   /** Advance so that the host timer shows `digit` as its seconds digit, plus half a second. */
   const advanceToDigit = (digit: number): void => {
     vi.advanceTimersByTime(100_000 - (60_000 + digit * 1000 + 500));
@@ -394,13 +402,13 @@ describe('R1: the host owns the button timer digit', () => {
     payload === undefined ? { kind: 'button', type: 'release' } : { kind: 'button', type: 'release', payload };
 
   it('the deaf view carries the button digit the rules need', () => {
-    const rig = makeRig({ level });
+    const { rig, digitOf } = holdRig(false);
     const view = last(rig.rec[rig.peerOf('deaf')].views).view;
     expect(view.role === 'deaf' && view.modules[0].data['digit']).toBe(digitOf);
   });
 
   it('a bogus client digit is overwritten by the real host digit (solves when the host timer matches)', () => {
-    const rig = makeRig({ level });
+    const { rig, digitOf } = holdRig(false);
     const blind = rig.guests[rig.peerOf('blind')];
     advanceToDigit(digitOf);
     blind.sendAct('m0', hold);
@@ -410,7 +418,7 @@ describe('R1: the host owns the button timer digit', () => {
   });
 
   it('a missing client digit is filled in by the host', () => {
-    const rig = makeRig({ level });
+    const { rig, digitOf } = holdRig(false);
     const blind = rig.guests[rig.peerOf('blind')];
     advanceToDigit(digitOf);
     blind.sendAct('m0', hold);
@@ -419,7 +427,7 @@ describe('R1: the host owns the button timer digit', () => {
   });
 
   it('a correct client digit at the wrong host time does not solve (strike)', () => {
-    const rig = makeRig({ level });
+    const { rig, digitOf } = holdRig(false);
     const blind = rig.guests[rig.peerOf('blind')];
     advanceToDigit((digitOf + 3) % 10);
     blind.sendAct('m0', hold);
@@ -430,7 +438,7 @@ describe('R1: the host owns the button timer digit', () => {
   });
 
   it('uses the host clock at the moment of the act, not the last 250 ms tick', () => {
-    const rig = makeRig({ level });
+    const { rig, digitOf } = holdRig(false);
     const blind = rig.guests[rig.peerOf('blind')];
     // land exactly on a tick boundary 250 ms into the digit, then let 400 ms pass without a tick
     vi.advanceTimersByTime(100_000 - (60_000 + digitOf * 1000 + 250));
@@ -443,7 +451,7 @@ describe('R1: the host owns the button timer digit', () => {
   });
 
   it('the host overwrites its own local release too', () => {
-    const rig = makeRig({ level, rngSeed: HOST_IS_BLIND });
+    const { rig, digitOf } = holdRig(true);
     advanceToDigit(digitOf);
     rig.host.act('m0', hold);
     rig.host.act('m0', release({ timerDigit: (digitOf + 5) % 10 }));
@@ -457,7 +465,7 @@ describe('R2: end stats', () => {
     const rig = makeRig({ level });
     vi.advanceTimersByTime(5000);
     const blind = rig.guests[rig.peerOf('blind')];
-    const steps = solveAll(level);
+    const steps = solveAll(rig);
     // one deliberate strike first
     blind.sendAct('m0', { kind: 'wires', type: 'cut', payload: { index: ((steps[0].action.payload?.['index'] as number) + 1) % 3 } });
     expect(rig.snap().strikesLeft).toBe(2);
@@ -488,7 +496,7 @@ describe('R2: end stats', () => {
     const level = def({ moduleKinds: ['wires'], strikes: 1, timeMs: 100_000 });
     const rig = makeRig({ level });
     vi.advanceTimersByTime(10_000);
-    const correct = solveAll(level)[0].action.payload?.['index'] as number;
+    const correct = solveAll(rig)[0].action.payload?.['index'] as number;
     rig.guests[rig.peerOf('blind')].sendAct('m0', {
       kind: 'wires',
       type: 'cut',
@@ -505,7 +513,7 @@ describe('R2: end stats', () => {
 
   it('a finished level stops all timers and ignores later input', () => {
     const rig = makeRig({ level: def({ moduleKinds: ['wires'] }) });
-    const { moduleId, action } = solveAll(rig.level)[0];
+    const { moduleId, action } = solveAll(rig)[0];
     rig.guests[rig.peerOf('blind')].sendAct(moduleId, action);
     expect(vi.getTimerCount()).toBe(0);
     const viewsBefore = rig.raw[IDS[1]].length;
@@ -523,7 +531,7 @@ describe('won propagation through real solve actions', () => {
     const level = def({ moduleKinds: ['wires', 'symbols', 'code'], seed: 31337 });
     const rig = makeRig({ level });
     const blind = rig.guests[rig.peerOf('blind')];
-    const steps = solveAll(level);
+    const steps = solveAll(rig);
     expect(steps.length).toBeGreaterThan(3);
     steps.forEach((s, i) => {
       expect(rig.snap().status).toBe('playing');
@@ -541,7 +549,7 @@ describe('won propagation through real solve actions', () => {
     const level = def({ moduleKinds: ['wires'], seed: 99 });
     const rig = makeRig({ level, rngSeed: HOST_IS_BLIND });
     expect(rig.host.role).toBe('blind');
-    const { moduleId, action } = solveAll(level)[0];
+    const { moduleId, action } = solveAll(rig)[0];
     rig.host.act(moduleId, action);
     expect(rig.snap().status).toBe('won');
     for (const id of IDS) expect(rig.rec[id].ended.map((e) => e.reason)).toEqual(['won']);
@@ -574,13 +582,13 @@ describe('R10: the host is also a player', () => {
     const level = def({ moduleKinds: ['wires'] });
     const notBlind = makeRig({ level, rngSeed: HOST_IS_MUTE });
     const before = json(notBlind.snap());
-    notBlind.host.act('m0', solveAll(level)[0].action);
+    notBlind.host.act('m0', solveAll(notBlind)[0].action);
     expect(json(notBlind.snap())).toBe(before);
     notBlind.host.stop();
     for (const g of Object.values(notBlind.guests)) g.stop();
 
     const blind = makeRig({ level, rngSeed: HOST_IS_BLIND });
-    blind.host.act('m0', solveAll(level)[0].action);
+    blind.host.act('m0', solveAll(blind)[0].action);
     expect(blind.snap().status).toBe('won');
   });
 
@@ -815,7 +823,7 @@ describe('stop()', () => {
     const rig = makeRig({ level: def({ moduleKinds: ['wires'] }) });
     rig.host.stop();
     const before = json(rig.snap());
-    rig.guests[rig.peerOf('blind')].sendAct('m0', solveAll(rig.level)[0].action);
+    rig.guests[rig.peerOf('blind')].sendAct('m0', solveAll(rig)[0].action);
     expect(json(rig.snap())).toBe(before);
     for (const g of Object.values(rig.guests)) g.stop();
     expect(vi.getTimerCount()).toBe(0);
@@ -838,5 +846,241 @@ describe('GuestGame constructed before the host starts', () => {
     rig.host.start();
     expect(rig.guests[IDS[1]].role).not.toBeNull();
     expect(rig.rec[IDS[1]].views.length).toBeGreaterThan(0);
+  });
+});
+
+describe('I1: the host salts the session seed', () => {
+  it('a level rebuilt from anything a guest sees does not reproduce the host bomb (10 rng seeds)', () => {
+    const level = buildLevel(9); // all four module kinds
+    const bombs = new Set<string>();
+    for (let rngSeed = 1; rngSeed <= 10; rngSeed++) {
+      const rig = makeRig({ level, rngSeed });
+      const real = json(rig.snap().modules);
+      bombs.add(real);
+      for (const id of IDS.slice(1)) {
+        const roles = rig.raw[id].find((m) => m.t === 'roles');
+        if (roles?.t !== 'roles') throw new Error('no roles');
+        expect(roles.level.seed).toBe(0);
+        expect(roles.level.id).toBe(level.id);
+        expect(json(createSession(buildLevel(roles.level.id)).modules)).not.toBe(real);
+        expect(json(createSession(roles.level).modules)).not.toBe(real);
+      }
+      expect(json(createSession(level).modules)).not.toBe(real);
+      rig.host.stop();
+      for (const g of Object.values(rig.guests)) g.stop();
+    }
+    expect(bombs.size).toBe(10); // each host rng gives its own bomb
+  });
+
+  it('is still fully playable: the real solve actions of the salted bomb win', () => {
+    const rig = makeRig({ level: buildLevel(7), rngSeed: HOST_IS_MUTE });
+    const blind = rig.guests[rig.peerOf('blind')];
+    for (const s of solveAll(rig)) blind.sendAct(s.moduleId, s.action);
+    expect(rig.snap().status).toBe('won');
+    for (const id of IDS) expect(rig.rec[id].ended.map((e) => e.reason)).toEqual(['won']);
+  });
+});
+
+describe('I2: the watchdog is armed by the first valid host message', () => {
+  it('a long lobby wait before the host starts is not host-left', () => {
+    const rig = makeRig({ start: false, rngSeed: HOST_IS_MUTE });
+    vi.advanceTimersByTime(15_000);
+    for (const id of IDS.slice(1)) expect(rig.rec[id].ended).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0); // nothing armed yet
+    rig.host.start();
+    rig.host.stop(); // the host goes silent right after its first messages
+    vi.advanceTimersByTime(9000);
+    for (const id of IDS.slice(1)) expect(rig.rec[id].ended).toEqual([]);
+    vi.advanceTimersByTime(1000);
+    for (const id of IDS.slice(1)) expect(rig.rec[id].ended.map((e) => e.reason)).toEqual(['host-left']);
+    vi.advanceTimersByTime(60_000);
+    for (const id of IDS.slice(1)) expect(rig.rec[id].ended).toHaveLength(1);
+  });
+
+  it('malformed frames from the host do not arm it', () => {
+    const rig = makeRig({ start: false, rngSeed: HOST_IS_MUTE });
+    rig.inject(HOST, IDS[1], { t: 'nuke' });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('a host leaving during the lobby is host-left at once', () => {
+    const rig = makeRig({ start: false, rngSeed: HOST_IS_MUTE });
+    rig.net.disconnect(HOST);
+    for (const id of IDS.slice(1)) expect(rig.rec[id].ended.map((e) => e.reason)).toEqual(['host-left']);
+  });
+});
+
+describe('I3: frames lost before a channel opened are re-sent on the heartbeat', () => {
+  it('a guest that lost its first roles and view gets its role and current view after one heartbeat', () => {
+    for (const lost of [0, 1]) {
+      const rig = makeRig({ start: false, rngSeed: HOST_IS_MUTE, level: def({ moduleKinds: ['wires', 'code'] }) });
+      const id = IDS[1 + lost]; // one guest is blind, the other deaf
+      rig.net.hold(id);
+      rig.host.start();
+      expect(rig.net.queued(id)).toBeGreaterThanOrEqual(2);
+      rig.net.discard(id); // the channel was not open yet: roles and first view are gone
+      expect(rig.guests[id].role).toBeNull();
+      expect(rig.rec[id].views).toEqual([]);
+      vi.advanceTimersByTime(2000);
+      expect(rig.guests[id].role).toBe(rig.assign[id]);
+      expect(rig.rec[id].views.length).toBeGreaterThan(0);
+      expect(json(last(rig.rec[id].views).view)).toBe(json(projectView(rig.snap(), rig.assign[id])));
+      rig.host.stop();
+      for (const g of Object.values(rig.guests)) g.stop();
+    }
+  });
+
+  it('a repeated roles message in the middle of play neither resets nor breaks the guest', () => {
+    const rig = makeRig({ start: false, rngSeed: HOST_IS_MUTE, level: def({ moduleKinds: ['wires', 'code'] }) });
+    const blindId = rig.peerOf('blind');
+    let rolesFired = 0;
+    rig.guests[blindId].onRoles(() => rolesFired++);
+    rig.host.start();
+    const step = solveAll(rig)[0];
+    rig.guests[blindId].sendAct(step.moduleId, step.action); // wires solved, code still open
+    expect(rig.snap().status).toBe('playing');
+    vi.advanceTimersByTime(6100); // three heartbeats
+    expect(rig.raw[blindId].filter((m) => m.t === 'roles').length).toBeGreaterThanOrEqual(4);
+    expect(rolesFired).toBe(1);
+    expect(rig.guests[blindId].role).toBe('blind');
+    expect(rig.rec[blindId].ended).toEqual([]);
+    expect(json(last(rig.rec[blindId].views).view)).toBe(json(projectView(rig.snap(), 'blind')));
+    // and the game goes on
+    for (const s of solveAll(rig).slice(1)) rig.guests[blindId].sendAct(s.moduleId, s.action);
+  });
+
+  it('a repeated roles message cannot change the role of a started guest', () => {
+    const rig = makeRig({ rngSeed: HOST_IS_MUTE });
+    const id = IDS[1];
+    const role = rig.guests[id].role;
+    rig.inject(HOST, id, { t: 'roles', assign: { [id]: role === 'blind' ? 'deaf' : 'blind' }, level: def() });
+    expect(rig.guests[id].role).toBe(role);
+  });
+});
+
+describe('I4: GuestGame needs the complete room', () => {
+  it('throws with 0 or 1 peers, and on the host peer itself', () => {
+    expect(() => new GuestGame(createMemoryNetwork(['bbbbbbbb'])[0], Date.now)).toThrow();
+    expect(() => new GuestGame(createMemoryNetwork(IDS.slice(0, 2))[1], Date.now)).toThrow();
+    expect(() => new GuestGame(createMemoryNetwork(IDS)[0], Date.now)).toThrow(); // lowest id is the host
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('with two peers it takes the lowest id as host and talks only to it', () => {
+    const net = createMemoryNetwork(IDS);
+    const heard: Record<PeerId, NetMsg[]> = { [IDS[0]]: [], [IDS[1]]: [] };
+    net[0].onMessage((_f, m) => heard[IDS[0]].push(m));
+    net[1].onMessage((_f, m) => heard[IDS[1]].push(m));
+    const guest = new GuestGame(net[2], Date.now);
+    guest.sendAct('m0', { kind: 'wires', type: 'cut', payload: { index: 0 } });
+    guest.sendPointer(0.5, 0.5);
+    guest.sendEmote('yes');
+    expect(heard[IDS[0]].map((m) => m.t)).toEqual(['act', 'pointer', 'emote']);
+    expect(heard[IDS[1]]).toEqual([]);
+    // a frame from the other guest is not the host's
+    const got: unknown[] = [];
+    guest.onEnded((r) => got.push(r));
+    net[1].send(IDS[2], { t: 'ended', reason: 'won' });
+    expect(got).toEqual([]);
+    guest.stop();
+  });
+});
+
+describe('I5: a woken-up tab is not declared host-left', () => {
+  const rigWithClock = (): { rig: Rig; clock: { t: number }; guest: PeerId } => {
+    const clock = { t: 50_000 };
+    const rig = makeRig({ rngSeed: HOST_IS_MUTE, guestNow: () => clock.t });
+    return { rig, clock, guest: rig.peerOf('blind') };
+  };
+  const second = (clock: { t: number }): void => {
+    clock.t += 1000;
+    vi.advanceTimersByTime(1000);
+  };
+
+  it('a 30 s jump of the guest clock followed by a host heartbeat is not host-left', () => {
+    const { rig, clock, guest } = rigWithClock();
+    clock.t += 30_000; // the tab was frozen: the overdue watchdog runs before the queued frames
+    vi.advanceTimersByTime(1000);
+    expect(rig.rec[guest].ended).toEqual([]);
+    rig.inject(HOST, guest, { t: 'heartbeat', hostTimeMs: 1 });
+    for (let i = 0; i < 5; i++) second(clock);
+    expect(rig.rec[guest].ended).toEqual([]);
+  });
+
+  it('genuine silence still fires host-left exactly once, at 10 s (also after a wake-up)', () => {
+    const { rig, clock, guest } = rigWithClock();
+    clock.t += 30_000;
+    vi.advanceTimersByTime(1000); // wake-up check: the window restarts
+    rig.host.stop();
+    for (let i = 0; i < 9; i++) second(clock);
+    expect(rig.rec[guest].ended).toEqual([]);
+    second(clock);
+    expect(rig.rec[guest].ended.map((e) => e.reason)).toEqual(['host-left']);
+    for (let i = 0; i < 20; i++) second(clock);
+    expect(rig.rec[guest].ended).toHaveLength(1);
+  });
+});
+
+describe('minor fixes', () => {
+  it('a backwards host clock does not refund time', () => {
+    const clock = { t: 10_000 };
+    const rig = makeRig({ rngSeed: HOST_IS_MUTE, hostNow: () => clock.t, level: def({ timeMs: 100_000 }) });
+    clock.t = 15_000;
+    vi.advanceTimersByTime(250);
+    expect(rig.snap().msLeft).toBe(95_000);
+    clock.t = 12_000; // clock stepped back
+    vi.advanceTimersByTime(250);
+    expect(rig.snap().msLeft).toBe(95_000);
+    clock.t = 16_000;
+    vi.advanceTimersByTime(250);
+    expect(rig.snap().msLeft).toBe(94_000); // 1 s since the last forward reading, not 4 s
+  });
+
+  it('msLeftRatio is never NaN, even for a level with no time at all', () => {
+    const rig = makeRig({ rngSeed: HOST_IS_MUTE, level: def({ moduleKinds: ['wires'], timeMs: 0 }) });
+    vi.advanceTimersByTime(250);
+    for (const id of IDS) {
+      expect(rig.rec[id].ended.map((e) => e.reason)).toEqual(['lost']);
+      expect(rig.rec[id].ended[0].stats).toEqual({ strikesLeft: 3, msLeftRatio: 0 });
+    }
+  });
+
+  it('a transport send that throws cannot abort the host (other guests, local callbacks, timers)', () => {
+    const net = createMemoryNetwork(IDS);
+    const bad = IDS[1];
+    const t0 = {
+      ...net[0],
+      send: (to: PeerId, msg: NetMsg): void => {
+        if (to === bad) throw new Error('queue full');
+        net[0].send(to, msg);
+      },
+    };
+    const host = new HostGame(t0, def({ moduleKinds: ['wires'] }), Date.now, { rng: createRng(HOST_IS_MUTE) });
+    const localViews: unknown[] = [];
+    host.onView((v) => localViews.push(v));
+    const good = new GuestGame(net[2], Date.now);
+    const goodViews: unknown[] = [];
+    good.onView((v) => goodViews.push(v));
+    expect(() => host.start()).not.toThrow();
+    expect(() => vi.advanceTimersByTime(4000)).not.toThrow();
+    expect(good.role).not.toBeNull();
+    expect(goodViews.length).toBeGreaterThan(0);
+    expect(localViews.length).toBeGreaterThan(0);
+    host.stop();
+    good.stop();
+  });
+
+  it('a guest send that throws does not throw out of sendAct', () => {
+    const net = createMemoryNetwork(IDS);
+    const t2 = {
+      ...net[2],
+      send: (): void => {
+        throw new Error('queue full');
+      },
+    };
+    const guest = new GuestGame(t2, Date.now);
+    expect(() => guest.sendAct('m0', { kind: 'wires', type: 'cut', payload: { index: 0 } })).not.toThrow();
+    expect(() => guest.sendPointer(0.1, 0.1)).not.toThrow();
+    guest.stop();
   });
 });
