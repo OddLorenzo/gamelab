@@ -95,13 +95,13 @@ export const en: Record<string, string> = {
 
   'manual.wires.title': 'Wires',
   'manual.wires.rule.3':
-    '3 wires. Count the wires from the top: the first wire is the top one. Check the lines in this order and stop at the first one that applies:\n1. No {red} wire: cut the second wire.\n2. Otherwise, if the last wire is {white}: cut the first wire.\n3. Otherwise, if there is more than one {blue} wire: cut the last {blue} wire.\n4. Otherwise: cut the last wire.',
+    '3 wires. Count the wires from the top: the first wire is the top one. Cut wires still count. Check the lines in this order and stop at the first one that applies:\n1. No {red} wire: cut the second wire.\n2. Otherwise, if the last wire is {white}: cut the first wire.\n3. Otherwise, if there is more than one {blue} wire: cut the last {blue} wire.\n4. Otherwise: cut the last wire.',
   'manual.wires.rule.4':
-    '4 wires. Count the wires from the top: the first wire is the top one. Check the lines in this order and stop at the first one that applies:\n1. More than one {red} wire: cut the last {red} wire.\n2. Otherwise, if the last wire is {yellow} and there is no {red} wire: cut the first wire.\n3. Otherwise, if there is exactly one {blue} wire: cut that {blue} wire.\n4. Otherwise, if there is more than one {yellow} wire: cut the last wire.\n5. Otherwise: cut the second wire.',
+    '4 wires. Count the wires from the top: the first wire is the top one. Cut wires still count. Check the lines in this order and stop at the first one that applies:\n1. More than one {red} wire: cut the last {red} wire.\n2. Otherwise, if the last wire is {yellow} and there is no {red} wire: cut the first wire.\n3. Otherwise, if there is exactly one {blue} wire: cut that {blue} wire.\n4. Otherwise, if there is more than one {yellow} wire: cut the last wire.\n5. Otherwise: cut the second wire.',
   'manual.wires.rule.5':
-    '5 wires. Count the wires from the top: the first wire is the top one. Check the lines in this order and stop at the first one that applies:\n1. If the last wire is {green}: cut the fourth wire.\n2. Otherwise, if there is exactly one {red} wire and more than one {yellow} wire: cut the first wire.\n3. Otherwise, if there is no {green} wire: cut the second wire.\n4. Otherwise: cut the first wire.',
+    '5 wires. Count the wires from the top: the first wire is the top one. Cut wires still count. Check the lines in this order and stop at the first one that applies:\n1. If the last wire is {green}: cut the fourth wire.\n2. Otherwise, if there is exactly one {red} wire and more than one {yellow} wire: cut the first wire.\n3. Otherwise, if there is no {green} wire: cut the second wire.\n4. Otherwise: cut the first wire.',
   'manual.wires.rule.6':
-    '6 wires. Count the wires from the top: the first wire is the top one. Check the lines in this order and stop at the first one that applies:\n1. No {yellow} wire: cut the third wire.\n2. Otherwise, if there is exactly one {yellow} wire and more than one {white} wire: cut the last {white} wire.\n3. Otherwise, if there is no {white} wire: cut the last wire.\n4. Otherwise: cut the fourth wire.',
+    '6 wires. Count the wires from the top: the first wire is the top one. Cut wires still count. Check the lines in this order and stop at the first one that applies:\n1. No {yellow} wire: cut the third wire.\n2. Otherwise, if there is exactly one {yellow} wire and more than one {white} wire: cut the last {white} wire.\n3. Otherwise, if there is no {white} wire: cut the last wire.\n4. Otherwise: cut the fourth wire.',
 
   'manual.button.title': 'The button',
   'manual.button.rule.1':
@@ -111,7 +111,7 @@ export const en: Record<string, string> = {
   'manual.button.rule.4': '4. The {yellow} button labelled PRESS: hold.',
   'manual.button.rule.5': '5. Anything else: tap.',
   'manual.button.rule.6':
-    'A tap: touch the button and let go at once. A hold: keep the finger on the button, then let go at the moment when the last digit of the seconds on the timer is the digit on the button (timer at 2:47 and digit 7: let go while the timer shows 7). Letting go at another digit is a strike.',
+    'A tap: touch the button and let go at once. A hold: keep the finger on the button, then let go at the moment when the last digit of the seconds on the timer is the digit on the button (timer at 2:47 and digit 7: let go while the seconds of the timer end in 7). Letting go at another digit is a strike. Holding a button that needs a tap for too long is also a strike.',
 
   'manual.symbols.title': 'Symbols',
   'manual.symbols.rule.1':
@@ -121,7 +121,7 @@ export const en: Record<string, string> = {
   'manual.symbols.rule.3':
     'Tap the 4 symbols in the order they appear in that column, from top to bottom. Give the order as the numbers 1 to 4, for example 3, 1, 4, 2.',
   'manual.symbols.rule.4':
-    'A wrong tap is a strike and the sequence starts again from the first symbol of the column. After the 4th right tap the module is solved.',
+    'A wrong tap is a strike and you must start the whole sequence again from the beginning. After the 4th right tap the module is solved.',
 
   'manual.code.title': 'The code',
   'manual.code.rule.1':
@@ -230,13 +230,13 @@ export const fr: Record<string, string> = {
 
   'manual.wires.title': 'Fils',
   'manual.wires.rule.3':
-    "3 fils. On compte les fils à partir du haut : le premier fil est celui du haut. Vérifie les lignes dans cet ordre et arrête-toi à la première qui s'applique :\n1. Aucun fil {red} : coupe le deuxième fil.\n2. Sinon, si le dernier fil est {white} : coupe le premier fil.\n3. Sinon, s'il y a plus d'un fil {blue} : coupe le dernier fil {blue}.\n4. Sinon : coupe le dernier fil.",
+    "3 fils. On compte les fils à partir du haut : le premier fil est celui du haut. Les fils coupés comptent toujours. Vérifie les lignes dans cet ordre et arrête-toi à la première qui s'applique :\n1. Aucun fil {red} : coupe le deuxième fil.\n2. Sinon, si le dernier fil est {white} : coupe le premier fil.\n3. Sinon, s'il y a plus d'un fil {blue} : coupe le dernier fil {blue}.\n4. Sinon : coupe le dernier fil.",
   'manual.wires.rule.4':
-    "4 fils. On compte les fils à partir du haut : le premier fil est celui du haut. Vérifie les lignes dans cet ordre et arrête-toi à la première qui s'applique :\n1. Plus d'un fil {red} : coupe le dernier fil {red}.\n2. Sinon, si le dernier fil est {yellow} et qu'il n'y a aucun fil {red} : coupe le premier fil.\n3. Sinon, s'il y a exactement un fil {blue} : coupe ce fil {blue}.\n4. Sinon, s'il y a plus d'un fil {yellow} : coupe le dernier fil.\n5. Sinon : coupe le deuxième fil.",
+    "4 fils. On compte les fils à partir du haut : le premier fil est celui du haut. Les fils coupés comptent toujours. Vérifie les lignes dans cet ordre et arrête-toi à la première qui s'applique :\n1. Plus d'un fil {red} : coupe le dernier fil {red}.\n2. Sinon, si le dernier fil est {yellow} et qu'il n'y a aucun fil {red} : coupe le premier fil.\n3. Sinon, s'il y a exactement un fil {blue} : coupe ce fil {blue}.\n4. Sinon, s'il y a plus d'un fil {yellow} : coupe le dernier fil.\n5. Sinon : coupe le deuxième fil.",
   'manual.wires.rule.5':
-    "5 fils. On compte les fils à partir du haut : le premier fil est celui du haut. Vérifie les lignes dans cet ordre et arrête-toi à la première qui s'applique :\n1. Si le dernier fil est {green} : coupe le quatrième fil.\n2. Sinon, s'il y a exactement un fil {red} et plus d'un fil {yellow} : coupe le premier fil.\n3. Sinon, s'il n'y a aucun fil {green} : coupe le deuxième fil.\n4. Sinon : coupe le premier fil.",
+    "5 fils. On compte les fils à partir du haut : le premier fil est celui du haut. Les fils coupés comptent toujours. Vérifie les lignes dans cet ordre et arrête-toi à la première qui s'applique :\n1. Si le dernier fil est {green} : coupe le quatrième fil.\n2. Sinon, s'il y a exactement un fil {red} et plus d'un fil {yellow} : coupe le premier fil.\n3. Sinon, s'il n'y a aucun fil {green} : coupe le deuxième fil.\n4. Sinon : coupe le premier fil.",
   'manual.wires.rule.6':
-    "6 fils. On compte les fils à partir du haut : le premier fil est celui du haut. Vérifie les lignes dans cet ordre et arrête-toi à la première qui s'applique :\n1. Aucun fil {yellow} : coupe le troisième fil.\n2. Sinon, s'il y a exactement un fil {yellow} et plus d'un fil {white} : coupe le dernier fil {white}.\n3. Sinon, s'il n'y a aucun fil {white} : coupe le dernier fil.\n4. Sinon : coupe le quatrième fil.",
+    "6 fils. On compte les fils à partir du haut : le premier fil est celui du haut. Les fils coupés comptent toujours. Vérifie les lignes dans cet ordre et arrête-toi à la première qui s'applique :\n1. Aucun fil {yellow} : coupe le troisième fil.\n2. Sinon, s'il y a exactement un fil {yellow} et plus d'un fil {white} : coupe le dernier fil {white}.\n3. Sinon, s'il n'y a aucun fil {white} : coupe le dernier fil.\n4. Sinon : coupe le quatrième fil.",
 
   'manual.button.title': 'Le bouton',
   'manual.button.rule.1':
@@ -246,7 +246,7 @@ export const fr: Record<string, string> = {
   'manual.button.rule.4': '4. Bouton {yellow} avec le mot PRESS : appui long.',
   'manual.button.rule.5': '5. Tout le reste : appui bref.',
   'manual.button.rule.6':
-    'Appui bref : touche le bouton et relâche tout de suite. Appui long : garde le doigt sur le bouton, puis relâche au moment où le dernier chiffre des secondes du minuteur est le chiffre du bouton (minuteur à 2:47 et chiffre 7 : relâche quand le minuteur affiche 7). Relâcher sur un autre chiffre compte comme une erreur.',
+    'Appui bref : touche le bouton et relâche tout de suite. Appui long : garde le doigt sur le bouton, puis relâche au moment où le dernier chiffre des secondes du minuteur est le chiffre du bouton (minuteur à 2:47 et chiffre 7 : relâche tant que les secondes du minuteur se terminent par 7). Relâcher sur un autre chiffre compte comme une erreur. Garder le doigt trop longtemps sur un bouton à appui bref compte aussi comme une erreur.',
 
   'manual.symbols.title': 'Symboles',
   'manual.symbols.rule.1':
@@ -256,7 +256,7 @@ export const fr: Record<string, string> = {
   'manual.symbols.rule.3':
     "Il faut taper les 4 symboles dans l'ordre où ils apparaissent dans cette colonne, de haut en bas. Donne l'ordre avec les numéros de 1 à 4, par exemple 3, 1, 4, 2.",
   'manual.symbols.rule.4':
-    'Un mauvais appui compte comme une erreur et la séquence repart au premier symbole de la colonne. Après le 4e bon appui, le module est désamorcé.',
+    'Un mauvais appui compte comme une erreur : il faut recommencer toute la séquence depuis le début. Après le 4e bon appui, le module est désamorcé.',
 
   'manual.code.title': 'Le code',
   'manual.code.rule.1':

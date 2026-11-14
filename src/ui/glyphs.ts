@@ -1,31 +1,32 @@
 /**
  * Display character for each glyph id of the manual's symbol table (SYMBOL_COLUMNS, 20 ids).
- * Plain text symbols from the Geometric Shapes, Miscellaneous Symbols, Dingbats and Arrows
- * blocks, one code point each, none of them an emoji, so every browser draws them as text in
- * the page font colour with no variation selector. The ids are only names: the shape does not
- * have to look like its name, it has to be distinct from the 19 others. The accessible name of
- * a glyph is the i18n key `glyph.<id>`.
+ * Players describe a glyph by its NAME over voice, so each shape reads as its name as far as
+ * plain system-font symbols allow, and no two shapes look alike (no two radial / sun / star
+ * bursts, one star only). Plain text symbols from the Miscellaneous Symbols, Dingbats, Arrows,
+ * Geometric Shapes, Greek and Cyrillic blocks. A few base characters also have a color-emoji
+ * form (anchor, cloud, tree, gear, flame): those carry U+FE0E so every browser draws them as
+ * text in the page font color. The ids come from src/core and never change; the shape may.
  */
 export const GLYPH_CHARS: Record<string, string> = {
-  flame: '☼',
-  spiral: '❃',
-  crab: '⋈',
-  hand: '☞',
-  anchor: '‡',
-  eye: '◉',
-  crown: '♛',
-  moon: '☾',
-  key: '⊶',
-  cloud: '◐',
+  flame: '♨\uFE0E', // hot springs: steam / heat
+  spiral: '@', // a curl that winds inward
+  crab: 'Ж', // Cyrillic zhe: a body with pincers and legs
+  hand: '☞', // pointing hand
+  anchor: '⚓\uFE0E',
+  eye: '◉', // fisheye: ring and pupil
+  crown: '♛', // chess queen
+  moon: '☾', // crescent
+  key: '⊸', // ring and shaft
+  cloud: '☁\uFE0E',
   arrow: '➤',
-  tree: '⋔',
-  shell: '❁',
-  leaf: '❧',
-  gear: '✹',
-  bolt: '↯',
-  drop: '▼',
+  tree: '♣\uFE0E', // club: a crown on a trunk
+  shell: '⌓', // segment: a scallop fan
+  leaf: '❧', // rotated floral heart bullet: a leaf
+  gear: '⚙\uFE0E', // cog
+  bolt: '↯', // zigzag arrow
+  drop: '▼', // downward point
   star: '★',
-  bell: '♪',
+  bell: 'Ω', // omega: a bell outline
   wave: '≈',
 };
 

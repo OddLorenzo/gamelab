@@ -43,8 +43,13 @@ export interface EmoteWheel {
   open(): void;
   close(): void;
   isOpen(): boolean;
-  /** A press held still for 400 ms on `target` opens the wheel. Removed again by destroy(). */
-  attachLongPress(target: HTMLElement): void;
+  /**
+   * A press held still for 400 ms on `target` opens the wheel. Removed again by destroy().
+   * A press only counts when it is a primary-pointer, main-button press that does not land on
+   * the wheel itself or inside an element marked `data-no-longpress` (the bomb's touch slots,
+   * so a button hold is never mistaken for it), AND `shouldStart` (if given) returns true.
+   */
+  attachLongPress(target: HTMLElement, shouldStart?: (ev: PointerEvent) => boolean): void;
   destroy(): void;
 }
 
@@ -115,21 +120,19 @@ export function createEmoteWheel(root: HTMLElement, deps: EmoteWheelDeps): Emote
     if (pending !== null) clearTimer(pending);
     pending = null;
   };
-  const onDown = (ev: Event): void => {
-    stopPress();
-    const e = ev as MouseEvent;
-    start = { x: e.clientX, y: e.clientY };
-    pending = setTimer(() => {
-      pending = null;
-      open();
-    }, LONG_PRESS_MS);
+  /** Built-in guard: primary pointer, main button, not on the wheel, not on a no-long-press zone. */
+  const mayStart = (ev: PointerEvent): boolean => {
+    if (ev.isPrimary === false || ev.button !== 0) return false;
+    const node = ev.target instanceof Element ? ev.target : null;
+    if (node !== null && (wrap.contains(node) || node.closest('[data-no-longpress]') !== null)) return false;
+    return true;
   };
   const onMove = (ev: Event): void => {
     if (pending === null) return;
     const e = ev as MouseEvent;
     if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > LONG_PRESS_MOVE_PX) stopPress();
   };
-  const attached: HTMLElement[] = [];
+  const attached: { target: HTMLElement; onDown: (ev: Event) => void }[] = [];
   const END_EVENTS = ['pointerup', 'pointercancel', 'pointerleave'] as const;
 
   root.append(wrap);
@@ -138,8 +141,18 @@ export function createEmoteWheel(root: HTMLElement, deps: EmoteWheelDeps): Emote
     open,
     close,
     isOpen: () => opened,
-    attachLongPress(target) {
-      attached.push(target);
+    attachLongPress(target, shouldStart) {
+      const onDown = (ev: Event): void => {
+        const e = ev as PointerEvent;
+        if (!mayStart(e) || (shouldStart !== undefined && !shouldStart(e))) return;
+        stopPress();
+        start = { x: e.clientX, y: e.clientY };
+        pending = setTimer(() => {
+          pending = null;
+          open();
+        }, LONG_PRESS_MS);
+      };
+      attached.push({ target, onDown });
       target.addEventListener('pointerdown', onDown);
       target.addEventListener('pointermove', onMove);
       for (const type of END_EVENTS) target.addEventListener(type, stopPress);
@@ -147,7 +160,7 @@ export function createEmoteWheel(root: HTMLElement, deps: EmoteWheelDeps): Emote
     destroy() {
       close();
       stopPress();
-      for (const target of attached) {
+      for (const { target, onDown } of attached) {
         target.removeEventListener('pointerdown', onDown);
         target.removeEventListener('pointermove', onMove);
         for (const type of END_EVENTS) target.removeEventListener(type, stopPress);

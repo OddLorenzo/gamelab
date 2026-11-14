@@ -34,8 +34,14 @@ const q = (root: ParentNode, testid: string): HTMLElement => {
 const toggle = (root: ParentNode): HTMLButtonElement => q(root, 'emote-toggle') as HTMLButtonElement;
 const isOpen = (root: ParentNode): boolean => toggle(root).getAttribute('aria-expanded') === 'true';
 
-const fire = (target: EventTarget, type: string, init: { clientX?: number; clientY?: number } = {}): void => {
-  target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: init.clientX ?? 0, clientY: init.clientY ?? 0 }));
+const fire = (
+  target: EventTarget,
+  type: string,
+  init: { clientX?: number; clientY?: number; button?: number; isPrimary?: boolean } = {},
+): void => {
+  const ev = new MouseEvent(type, { bubbles: true, clientX: init.clientX ?? 0, clientY: init.clientY ?? 0, button: init.button ?? 0 });
+  if (init.isPrimary !== undefined) Object.defineProperty(ev, 'isPrimary', { value: init.isPrimary });
+  target.dispatchEvent(ev);
 };
 const key = (k: string): void => {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
@@ -249,6 +255,100 @@ describe('createEmoteWheel', () => {
     fire(other, 'pointerdown');
     vi.advanceTimersByTime(400);
     expect(isOpen(root)).toBe(true);
+  });
+
+  describe('which presses may start a long-press', () => {
+    it('a press on an element inside [data-no-longpress] never opens the wheel, even after 400 ms and more', () => {
+      const { root, stage, wheel } = mount();
+      wheel.attachLongPress(stage);
+      const slot = document.createElement('div');
+      slot.dataset['noLongpress'] = '';
+      const inner = document.createElement('span');
+      slot.append(inner);
+      stage.append(slot);
+      for (const target of [slot, inner]) {
+        fire(target, 'pointerdown');
+        vi.advanceTimersByTime(5000);
+        expect(isOpen(root)).toBe(false);
+        expect(vi.getTimerCount()).toBe(0);
+        fire(target, 'pointerup');
+      }
+      // the stage around it still works
+      fire(stage, 'pointerdown');
+      vi.advanceTimersByTime(400);
+      expect(isOpen(root)).toBe(true);
+    });
+
+    it('the toggle and the ring never start a long-press (the wheel sits inside the stage)', () => {
+      const { root, stage, wheel } = mount();
+      stage.append(root);
+      wheel.attachLongPress(stage);
+      fire(toggle(root), 'pointerdown');
+      expect(vi.getTimerCount()).toBe(0);
+      vi.advanceTimersByTime(1000);
+      expect(isOpen(root)).toBe(false);
+      toggle(root).click(); // open
+      const base = vi.getTimerCount(); // jsdom keeps a few timers of its own once focus moves
+      fire(q(root, 'emote-wave'), 'pointerdown');
+      fire(q(root, 'emote-ring'), 'pointerdown');
+      expect(vi.getTimerCount()).toBe(base);
+    });
+
+    it('a non-primary pointer or a right or middle button never starts it', () => {
+      const { root, stage, wheel } = mount();
+      wheel.attachLongPress(stage);
+      fire(stage, 'pointerdown', { isPrimary: false });
+      fire(stage, 'pointerdown', { button: 2 });
+      fire(stage, 'pointerdown', { button: 1 });
+      expect(vi.getTimerCount()).toBe(0);
+      vi.advanceTimersByTime(1000);
+      expect(isOpen(root)).toBe(false);
+      fire(stage, 'pointerdown', { isPrimary: true, button: 0 });
+      vi.advanceTimersByTime(400);
+      expect(isOpen(root)).toBe(true);
+    });
+
+    it('a second finger (non-primary) does not cancel or restart a running long-press', () => {
+      const { root, stage, wheel } = mount();
+      wheel.attachLongPress(stage);
+      fire(stage, 'pointerdown', { isPrimary: true });
+      vi.advanceTimersByTime(300);
+      fire(stage, 'pointerdown', { isPrimary: false });
+      vi.advanceTimersByTime(100);
+      expect(isOpen(root)).toBe(true);
+    });
+
+    it('a shouldStart that returns false blocks it, and it receives the pointer event', () => {
+      const { root, stage, wheel } = mount();
+      const seen: Event[] = [];
+      let allow = false;
+      wheel.attachLongPress(stage, (ev) => {
+        seen.push(ev);
+        return allow;
+      });
+      fire(stage, 'pointerdown');
+      vi.advanceTimersByTime(1000);
+      expect(isOpen(root)).toBe(false);
+      expect(seen).toHaveLength(1);
+      expect(seen[0].type).toBe('pointerdown');
+      allow = true;
+      fire(stage, 'pointerdown');
+      vi.advanceTimersByTime(400);
+      expect(isOpen(root)).toBe(true);
+    });
+
+    it('shouldStart cannot override the built-in guards (no-longpress, wheel, right button)', () => {
+      const { root, stage, wheel } = mount();
+      wheel.attachLongPress(stage, () => true);
+      const slot = document.createElement('div');
+      slot.dataset['noLongpress'] = '';
+      stage.append(slot);
+      fire(slot, 'pointerdown');
+      fire(stage, 'pointerdown', { button: 2 });
+      expect(vi.getTimerCount()).toBe(0);
+      vi.advanceTimersByTime(1000);
+      expect(isOpen(root)).toBe(false);
+    });
   });
 
   it('open() and close() work from code', () => {

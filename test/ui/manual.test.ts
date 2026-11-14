@@ -117,6 +117,23 @@ const layouts = (n: number): WireColor[][] => {
   return acc;
 };
 
+describe('wires text says cut wires still count (correctIndex reads every wire, cut or not)', () => {
+  it.each([3, 4, 5, 6])('%d wires: the lead-in says it in English and in French', (n) => {
+    const key = `manual.wires.rule.${n}`;
+    expect(en[key].split('\n')[0]).toContain('Cut wires still count.');
+    expect(fr[key].split('\n')[0]).toContain('Les fils coupés comptent toujours.');
+  });
+
+  it('the cut flag really does not change the answer (so the text is right to say so)', () => {
+    const colors: WireColor[] = ['white', 'red', 'blue', 'yellow'];
+    for (const cutAt of [0, 1, 2, 3]) {
+      const open: Wire[] = colors.map((color) => ({ color, cut: false }));
+      const cut: Wire[] = colors.map((color, i) => ({ color, cut: i === cutAt }));
+      expect(correctIndex(cut)).toBe(correctIndex(open));
+    }
+  });
+});
+
 describe('manual text equals the wires rule code', () => {
   for (const n of [3, 4, 5, 6]) {
     it(`${n} wires: the first line the text says applies is correctIndex, for every one of the ${5 ** n} layouts`, () => {
@@ -196,11 +213,17 @@ describe('manual text equals the button rule code', () => {
         expect(rule).toContain('hold');
         expect(rule).toContain('last digit of the seconds');
         expect(rule).toContain('digit on the button');
+        expect(rule).toContain('seconds of the timer end in 7');
+        expect(rule).not.toContain('while the timer shows');
+        expect(rule).toContain('too long');
       } else {
         expect(rule.toLowerCase()).toContain('appui bref');
         expect(rule.toLowerCase()).toContain('appui long');
         expect(rule).toContain('dernier chiffre des secondes');
         expect(rule).toContain('chiffre du bouton');
+        expect(rule).toContain('se terminent par 7');
+        expect(rule).not.toContain('quand le minuteur affiche');
+        expect(rule).toContain('trop longtemps');
       }
       setLang('en');
     });
@@ -222,8 +245,8 @@ describe('manual text equals the symbols rule code', () => {
       const r = [1, 2, 3, 4].map((n) => manualText(`manual.symbols.rule.${n}`));
       const f =
         lang === 'fr'
-          ? [['2 sur 2', 'en haut à gauche', 'en haut à droite', 'en bas à gauche', 'en bas à droite'], ['unique colonne', '4 symboles'], ['de haut en bas'], ['au premier symbole', '4e']]
-          : [['2 by 2', 'top left', 'top right', 'bottom left', 'bottom right'], ['one column', '4 symbols'], ['top to bottom'], ['first symbol', '4th']];
+          ? [['2 sur 2', 'en haut à gauche', 'en haut à droite', 'en bas à gauche', 'en bas à droite'], ['unique colonne', '4 symboles'], ['de haut en bas'], ['toute la séquence depuis le début', '4e']]
+          : [['2 by 2', 'top left', 'top right', 'bottom left', 'bottom right'], ['one column', '4 symbols'], ['top to bottom'], ['whole sequence again from the beginning', '4th']];
       for (const [i, frags] of f.entries()) for (const frag of frags) expect(r[i], `${lang} rule ${i + 1}`).toContain(frag);
       // the reading order is the slot order: slot 0 top left ... slot 3 bottom right
       const order = lang === 'fr' ? ['en haut à gauche', 'en haut à droite', 'en bas à gauche', 'en bas à droite'] : ['top left', 'top right', 'bottom left', 'bottom right'];
