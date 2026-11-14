@@ -1057,6 +1057,8 @@ describe('canvas size, layout and resize', () => {
       const specs = specsFromBlind(view);
       const layout = computeLayout(specs, size.w / size.h);
       expect(minSlotSizePx(layout, size.w, size.h), `level ${String(id)}`).toBeGreaterThanOrEqual(44);
+      // with the mic-denied banner (about 42 px) the stage is shorter: still tappable
+      expect(minSlotSizePx(computeLayout(specs, size.w / (size.h - 42)), size.w, size.h - 42), `level ${String(id)} with banner`).toBeGreaterThanOrEqual(44);
       const canvas = canvasOf(rig);
       for (const m of layout) {
         for (let slot = 0; slot < m.slots.length; slot++) {
