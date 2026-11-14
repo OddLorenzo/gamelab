@@ -1,0 +1,11 @@
+name = "monkey-bomb-signal"
+main = "src/index.ts"
+compatibility_date = "2026-08-15"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
