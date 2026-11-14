@@ -1,3 +1,4 @@
+import { PREFLIGHT_HEADERS, allowedOriginOf, withCors } from './cors';
 import { handleTurn } from './turn';
 
 export { Room } from './room';
@@ -35,26 +36,41 @@ async function createRoom(env: Cloudflare.Env): Promise<Response> {
   return json({ error: 'unavailable' }, 503);
 }
 
+async function route(request: Request, env: Cloudflare.Env): Promise<Response> {
+  const { pathname } = new URL(request.url);
+
+  if (pathname === '/rooms') {
+    if (request.method !== 'POST') return json({ error: 'method-not-allowed' }, 405, { allow: 'POST' });
+    return createRoom(env);
+  }
+
+  if (pathname === '/turn') return handleTurn(request, env);
+
+  const m = /^\/rooms\/([^/]+)\/ws$/.exec(pathname);
+  if (m) {
+    if (request.method !== 'GET') return json({ error: 'method-not-allowed' }, 405, { allow: 'GET' });
+    const code = m[1];
+    if (!CODE_RE.test(code)) return json({ error: 'no-room' }, 404);
+    const stub = env.ROOM.get(env.ROOM.idFromName(code));
+    return stub.fetch(new Request('https://room/ws', request));
+  }
+
+  return json({ error: 'not-found' }, 404);
+}
+
 export default {
   async fetch(request: Request, env: Cloudflare.Env): Promise<Response> {
-    const { pathname } = new URL(request.url);
+    const origin = allowedOriginOf(request, env);
+    const refused = request.headers.has('Origin') && origin === null;
 
-    if (pathname === '/rooms') {
-      if (request.method !== 'POST') return json({ error: 'method-not-allowed' }, 405, { allow: 'POST' });
-      return createRoom(env);
+    // Origin policy first: nothing below (Durable Objects, rate limiter, TURN provider) runs for a refused origin.
+    if (request.method === 'OPTIONS') {
+      if (refused || origin === null) return json({ error: 'origin-not-allowed' }, 403);
+      return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': origin, Vary: 'Origin', ...PREFLIGHT_HEADERS } });
     }
+    if (refused) return json({ error: 'origin-not-allowed' }, 403);
 
-    if (pathname === '/turn') return handleTurn(request, env);
-
-    const m = /^\/rooms\/([^/]+)\/ws$/.exec(pathname);
-    if (m) {
-      if (request.method !== 'GET') return json({ error: 'method-not-allowed' }, 405, { allow: 'GET' });
-      const code = m[1];
-      if (!CODE_RE.test(code)) return json({ error: 'no-room' }, 404);
-      const stub = env.ROOM.get(env.ROOM.idFromName(code));
-      return stub.fetch(new Request('https://room/ws', request));
-    }
-
-    return json({ error: 'not-found' }, 404);
+    const res = await route(request, env);
+    return origin === null ? res : withCors(res, origin);
   },
 } satisfies ExportedHandler<Cloudflare.Env>;

@@ -8,5 +8,7 @@ declare namespace Cloudflare {
     /** Worker secrets (wrangler secret put). Optional: without them /turn serves STUN only. */
     TURN_KEY_ID?: string;
     TURN_API_TOKEN?: string;
+    /** Comma-separated browser origins allowed to call the Worker (wrangler.toml [vars]). Missing or empty allows none. */
+    ALLOWED_ORIGINS?: string;
   }
 }
