@@ -228,7 +228,7 @@ interface Rig {
 }
 
 const mount = (
-  opts: { mic?: boolean; dpr?: number; level?: LevelDef; role?: Role | null; extra?: Partial<GameSceneDeps> } = {},
+  opts: { mic?: boolean; dpr?: number; level?: LevelDef; role?: Role | null; extra?: Partial<GameSceneDeps>; conn?: object } = {},
 ): Rig => {
   const root = document.createElement('div');
   document.body.append(root);
@@ -240,7 +240,7 @@ const mount = (
   const ended: [EndReason, EndStats | undefined][] = [];
   const info = {
     role: 'guest',
-    conn: { id: 'me' } as unknown as RoomConnection,
+    conn: { id: 'me', ...opts.conn } as unknown as RoomConnection,
     game: game as unknown as GameStartInfo['game'],
     level: opts.level ?? LEVEL,
     code: 'ABCD',
@@ -1356,6 +1356,20 @@ describe('canvas size, layout and resize', () => {
     window.dispatchEvent(new Event('resize'));
     rig.frames.flush();
     expect(callsOf(rig).filter((c) => c[0] === 'fillRect').length).toBeGreaterThan(0);
+  });
+});
+
+describe('connection events during a game', () => {
+  it('the scene never listens for link failures or signaling closes: the P2P game goes on whatever happens to them', () => {
+    const onLinkFailed = vi.fn();
+    const onSignalingClosed = vi.fn();
+    const rig = mount({ conn: { onLinkFailed, onSignalingClosed } });
+    rig.game.pushView(blindView);
+    rig.frames.flush();
+    expect(onLinkFailed).not.toHaveBeenCalled();
+    expect(onSignalingClosed).not.toHaveBeenCalled();
+    expect(rig.root.querySelector('[role="alert"]')).toBeNull();
+    expect(rig.root.querySelector('canvas')).not.toBeNull();
   });
 });
 

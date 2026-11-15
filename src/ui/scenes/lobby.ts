@@ -317,7 +317,8 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
       cls: 'foot-link',
       text: t('lobby.privacy'),
       testid: 'privacy',
-      attrs: { href: `${import.meta.env.BASE_URL}privacy.html`, rel: 'noopener' },
+      // A new tab: following the link in the same tab would drop the room connection.
+      attrs: { href: `${import.meta.env.BASE_URL}privacy.html`, target: '_blank', rel: 'noopener noreferrer' },
     });
     return el('footer', { cls: 'foot' }, [lang, privacy, el('p', { cls: 'version', text: t('lobby.footerVersion', { version }) })]);
   };
@@ -347,6 +348,7 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
       }
       conn = connection;
       code = room;
+      watchLinks(connection);
       view = 'room';
       shownPeers = -1;
       busy = false;
@@ -361,6 +363,25 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
     }
     busy = false;
     render(view === 'join' ? 'view' : 'heading');
+  };
+
+  /**
+   * Feedback while the lobby is up. The connection's callbacks cannot be unregistered, so each one
+   * checks that this connection is still the lobby's own: after Leave, or once a game took the
+   * connection over (`destroyed`), they do nothing and the P2P game runs on undisturbed.
+   */
+  const watchLinks = (connection: RoomConnection): void => {
+    connection.onLinkFailed(() => {
+      if (destroyed || conn !== connection) return;
+      errorKey = 'err.linkFailed'; // the room view stays: the player can press Leave
+      render();
+    });
+    connection.onSignalingClosed(() => {
+      if (destroyed || conn !== connection) return;
+      if (connection.peers().length >= 2) return; // everybody is here: the open links carry on without signaling
+      errorKey = 'err.network';
+      render();
+    });
   };
 
   /** RoomConnection has no peers-changed event: look at it on a timer and redraw when it moved. */

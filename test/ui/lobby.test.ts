@@ -16,6 +16,10 @@ interface FakeConn extends RoomConnection {
   sent: { to: PeerId; msg: NetMsg }[];
   deliver(from: PeerId, msg: NetMsg): void;
   leave(id: PeerId): void;
+  /** The link to `id` never opened (the mesh's watchdog or an ICE failure). */
+  failLink(id: PeerId): void;
+  /** The signaling socket dropped on its own. */
+  closeSignaling(code?: number, reason?: string): void;
   closed: boolean;
 }
 
@@ -23,6 +27,8 @@ interface FakeConn extends RoomConnection {
 const fakeConn = (id: PeerId, peerIds: PeerId[] = []): FakeConn => {
   const messageCbs: ((from: PeerId, msg: NetMsg) => void)[] = [];
   const leftCbs: ((id: PeerId) => void)[] = [];
+  const failedCbs: ((id: PeerId) => void)[] = [];
+  const closedCbs: ((code: number, reason: string) => void)[] = [];
   const conn: FakeConn = {
     id,
     peerIds,
@@ -39,6 +45,18 @@ const fakeConn = (id: PeerId, peerIds: PeerId[] = []): FakeConn => {
       leftCbs.push(cb);
     },
     onRemoteAudio: () => undefined,
+    onLinkFailed: (cb) => {
+      failedCbs.push(cb);
+    },
+    onSignalingClosed: (cb) => {
+      closedCbs.push(cb);
+    },
+    failLink: (who) => {
+      for (const cb of failedCbs) cb(who);
+    },
+    closeSignaling: (code = 1006, reason = '') => {
+      for (const cb of closedCbs) cb(code, reason);
+    },
     close: () => {
       conn.closed = true;
     },
@@ -178,7 +196,7 @@ describe('start view', () => {
 describe('privacy link', () => {
   const link = (root: ParentNode): HTMLAnchorElement | null => q(root, 'privacy') as HTMLAnchorElement | null;
 
-  it('is in the footer, points at privacy.html next to the page, opens in the same tab', () => {
+  it('is in the footer, points at privacy.html next to the page, opens in a NEW tab (the room connection must survive)', () => {
     const r = mount();
     const a = link(r.root);
     expect(a).not.toBeNull();
@@ -186,8 +204,8 @@ describe('privacy link', () => {
     expect(a?.closest('footer')).not.toBeNull();
     expect(a?.getAttribute('href')).toBe(`${import.meta.env.BASE_URL}privacy.html`);
     expect(a?.getAttribute('href')).not.toMatch(/^[a-z][a-z0-9+.-]*:|^\/\//i);
-    expect(a?.hasAttribute('target')).toBe(false);
-    expect(a?.getAttribute('rel')).toBe('noopener');
+    expect(a?.getAttribute('target')).toBe('_blank');
+    expect(a?.getAttribute('rel')).toBe('noopener noreferrer');
   });
 
   it('is labelled in both languages', async () => {
@@ -212,6 +230,8 @@ describe('privacy link', () => {
     await click(q(r.root, 'create'));
     await tick();
     expect(link(r.root)).not.toBeNull();
+    expect(link(r.root)?.getAttribute('target')).toBe('_blank');
+    expect(link(r.root)?.getAttribute('rel')).toBe('noopener noreferrer');
     expect(r.root.querySelector('footer')?.textContent).toContain('v0');
   });
 
@@ -571,6 +591,104 @@ describe('room view', () => {
     expect(r.conn.closed).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
     expect(q(r.root, 'create')).not.toBeNull();
+  });
+});
+
+describe('link failure and signaling loss in the lobby', () => {
+  const full = ['bbbbbbbb', 'cccccccc'];
+
+  it('a link that cannot be established shows err.linkFailed, keeps the room view and lets the player Leave', async () => {
+    const r = mount();
+    await click(q(r.root, 'create'));
+    r.conn.peerIds = ['bbbbbbbb'];
+    await tick();
+    r.conn.failLink('cccccccc');
+    expect(alertText(r)).toBe(t('err.linkFailed'));
+    expect(r.root.querySelector('[role="alert"]')?.textContent).toContain('strict network');
+    expect(q(r.root, 'room-code')?.textContent).toBe('ABCD'); // still the room view
+    expect(q(r.root, 'seats')).not.toBeNull();
+    await click(q(r.root, 'leave'));
+    expect(r.conn.closed).toBe(true);
+    expect(q(r.root, 'create')).not.toBeNull();
+    expect(alertText(r)).toBe('');
+  });
+
+  it('the error survives the polling redraws', async () => {
+    const r = mount();
+    await click(q(r.root, 'create'));
+    r.conn.failLink('bbbbbbbb');
+    r.conn.peerIds = ['cccccccc'];
+    await tick();
+    expect(alertText(r)).toBe(t('err.linkFailed'));
+  });
+
+  it('a signaling socket that closed while the lobby waits for players shows err.network', async () => {
+    const r = mount();
+    await click(q(r.root, 'create'));
+    r.conn.peerIds = ['bbbbbbbb'];
+    await tick();
+    r.conn.closeSignaling(1006, 'gone');
+    expect(alertText(r)).toBe(t('err.network'));
+    expect(q(r.root, 'room-code')).not.toBeNull();
+    expect(q(r.root, 'leave')).not.toBeNull();
+  });
+
+  it('a signaling close with all three already connected is not an error', async () => {
+    const r = mount();
+    await click(q(r.root, 'create'));
+    r.conn.peerIds = full;
+    await tick();
+    r.conn.closeSignaling();
+    expect(alertText(r)).toBe('');
+    expect((q(r.root, 'start') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('after Leave, a late failure or close from the old connection shows nothing', async () => {
+    const r = mount();
+    await click(q(r.root, 'create'));
+    await click(q(r.root, 'leave'));
+    r.conn.failLink('bbbbbbbb');
+    r.conn.closeSignaling();
+    expect(alertText(r)).toBe('');
+    expect(q(r.root, 'create')).not.toBeNull();
+  });
+
+  it('after the game starts (host), a late link failure or signaling close does not touch the screen', async () => {
+    const r = mount();
+    r.deps.onGameStart.mockImplementation(() => {
+      r.root.replaceChildren(Object.assign(document.createElement('main'), { id: 'game-scene' }));
+    });
+    await click(q(r.root, 'create'));
+    r.conn.peerIds = full;
+    await tick();
+    await click(q(r.root, 'start'));
+    const before = r.root.innerHTML;
+    r.conn.failLink('bbbbbbbb');
+    r.conn.closeSignaling();
+    await tick(2000);
+    expect(r.root.innerHTML).toBe(before);
+    expect(r.root.querySelector('#game-scene')).not.toBeNull();
+    (r.deps.onGameStart.mock.calls[0][0] as GameStartInfo).game.stop();
+  });
+
+  it('after the game starts (guest), a late link failure or signaling close does not touch the screen', async () => {
+    const r = mount({ id: 'bbbbbbbb' });
+    let info: GameStartInfo | null = null;
+    r.deps.onGameStart.mockImplementation((i: GameStartInfo) => {
+      info = i;
+      r.root.replaceChildren(Object.assign(document.createElement('main'), { id: 'game-scene' }));
+    });
+    await joinWith(r, 'ABCD');
+    r.conn.peerIds = ['aaaaaaaa', 'cccccccc'];
+    await tick();
+    r.conn.deliver('aaaaaaaa', { t: 'roles', assign: { aaaaaaaa: 'blind', bbbbbbbb: 'deaf', cccccccc: 'mute' }, level: { ...buildLevel(1), seed: 0 } });
+    expect(r.deps.onGameStart).toHaveBeenCalledTimes(1);
+    const before = r.root.innerHTML;
+    r.conn.failLink('cccccccc');
+    r.conn.closeSignaling();
+    await tick(2000);
+    expect(r.root.innerHTML).toBe(before);
+    (info as GameStartInfo | null)?.game.stop();
   });
 });
 

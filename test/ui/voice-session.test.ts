@@ -73,6 +73,8 @@ const fakeConn = (): FakeConn => {
     onRemoteAudio: (cb) => {
       conn.remoteCbs.push(cb);
     },
+    onLinkFailed: () => undefined,
+    onSignalingClosed: () => undefined,
     close: () => undefined,
     audio: (id) => {
       for (const cb of conn.remoteCbs) cb(id, {} as MediaStream);
