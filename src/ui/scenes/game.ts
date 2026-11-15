@@ -22,8 +22,8 @@ export interface Scene {
 
 /** Everything the scene takes from the outside, so tests drive time, frames and the screen. */
 export interface GameSceneDeps {
-  /** Only `setRole` is used: the scene applies the voice rules of the player's role. */
-  voice: Pick<VoiceSession, 'setRole'>;
+  /** The scene applies the voice rules of the player's role and tells the session who plays what. */
+  voice: Pick<VoiceSession, 'setRole' | 'setPeerRoles'>;
   /** Monotonic ms clock (the 50 ms pointer throttle). */
   now: () => number;
   /** Called once when the game ends. The scene has already stopped everything by then. */
@@ -93,7 +93,7 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
   let liveTimer: unknown = null;
   let sweepTimer: unknown = null;
 
-  /** Order of first appearance: the label ("Player 2") and the pointer color of a peer. */
+  /** Order of first appearance: the pointer color of a peer, and the emote label when its role is not known. */
   const senders = new Map<PeerId, number>();
   const remotes = new Map<PeerId, Remote>();
   const senderIndex = (by: PeerId): number | null => {
@@ -365,7 +365,14 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
 
   /* ------------------------------------------------ game callbacks (they cannot be unregistered) */
 
+  // The table's roles are known to a guest at mount and to the host once start() ran: the voice
+  // session mutes the mute player's audio on this device too. Roles first, then the local rule.
+  const applyVoice = (r: Role): void => {
+    deps.voice.setPeerRoles(game.peerRoles());
+    deps.voice.setRole(r);
+  };
   // A guest's scene is built when its role arrives, before the first view: its voice rules apply from now on.
+  deps.voice.setPeerRoles(game.peerRoles());
   if (game.role !== null) deps.voice.setRole(game.role);
 
   game.onView((view) => {
@@ -378,7 +385,7 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
       stage.replaceChildren(toast);
       main.dataset.role = view.role;
       ui = view.role === 'mute' ? mountMute() : mountCanvas(view.role);
-      deps.voice.setRole(view.role);
+      applyVoice(view.role);
     }
     // The deaf clock comes from game.msLeft(), so the heartbeat's own msLeft is not a change.
     const key = JSON.stringify(view.role === 'deaf' ? { ...view, msLeft: 0 } : view);
@@ -416,9 +423,13 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
 
   game.onEmote((by, id: EmoteId) => {
     if (!alive || !EMOTES.includes(id)) return;
-    const index = senderIndex(by);
+    // Roles are public at the table, so the same sender reads the same on every screen. The old
+    // "Player N" (numbered by first appearance, different per device) is only the fallback.
+    const senderRole = game.peerRoles();
+    const known = senderRole !== null && Object.hasOwn(senderRole, by) ? senderRole[by] : null;
+    const index = known === null ? senderIndex(by) : null;
     const text = t('game.emoteFrom', {
-      player: t('game.player', { n: index === null ? '?' : index + 1 }),
+      player: known !== null ? t(`role.${known}`) : t('game.player', { n: index === null ? '?' : index + 1 }),
       emote: t(`emote.${id}`),
     });
     // Clear first and write on the next task: an identical repeated emote is announced again.
@@ -440,6 +451,7 @@ export function createGameScene(root: HTMLElement, info: GameStartInfo, deps: Ga
   function stop(): void {
     if (!alive) return;
     alive = false;
+    deps.voice.setPeerRoles(null); // the next screen (results, lobby) lets everybody be heard again
     ui?.destroy();
     ui = null;
     wheel.destroy();

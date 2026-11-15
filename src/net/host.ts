@@ -86,6 +86,11 @@ export class HostGame implements Participant {
     return this.localRole;
   }
 
+  /** Who plays which role (public to the table), a copy; null before start(). */
+  peerRoles(): Record<PeerId, Role> | null {
+    return this.started ? { ...this.assign } : null;
+  }
+
   /** Deep copy of the authoritative session (for tests and debugging), null before start(). */
   snapshot(): Session | null {
     return this.session === null ? null : (JSON.parse(JSON.stringify(this.session)) as Session);

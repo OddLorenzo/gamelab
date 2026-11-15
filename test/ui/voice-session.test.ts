@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PeerId } from '../../src/net/protocol';
 import type { RoomConnection } from '../../src/net/transport';
 import { createVoiceSession } from '../../src/ui/voice-session';
@@ -244,5 +244,307 @@ describe('createVoiceSession', () => {
       conn.audio('p1');
     }).not.toThrow();
     expect(made).toHaveLength(1);
+  });
+});
+
+describe('receiver-side mute of the mute player', () => {
+  const ASSIGN = { me: 'blind', p1: 'mute', p2: 'deaf' } as const;
+
+  it('a blind listener mutes the mute peer only', () => {
+    const { conn, made, session } = rig();
+    conn.audio('p1');
+    conn.audio('p2');
+    session.setRole('blind');
+    session.setPeerRoles({ ...ASSIGN });
+    expect(made.map((a) => a.muted)).toEqual([true, false]);
+  });
+
+  it('a deaf listener mutes everybody (the mute peer included)', () => {
+    const { conn, made, session } = rig();
+    conn.audio('p1');
+    conn.audio('p2');
+    session.setPeerRoles({ me: 'deaf', p1: 'mute', p2: 'blind' });
+    session.setRole('deaf');
+    expect(made.map((a) => a.muted)).toEqual([true, true]);
+  });
+
+  it('the order of the two calls does not matter', () => {
+    const a = rig();
+    a.conn.audio('p1');
+    a.session.setPeerRoles({ ...ASSIGN });
+    a.session.setRole('blind');
+    const b = rig();
+    b.conn.audio('p1');
+    b.session.setRole('blind');
+    b.session.setPeerRoles({ ...ASSIGN });
+    expect(a.made[0].muted).toBe(true);
+    expect(b.made[0].muted).toBe(true);
+  });
+
+  it('a late element of the mute peer is muted BEFORE its stream is attached and played', () => {
+    const { conn, log, session } = rig();
+    session.setPeerRoles({ ...ASSIGN });
+    session.setRole('blind');
+    conn.audio('p1');
+    expect(log).toEqual(['a0.muted=true', 'a0.srcObject=stream', 'a0.play']);
+  });
+
+  it('a late element of a non-mute peer is not muted for a blind listener', () => {
+    const { conn, log, session } = rig();
+    session.setPeerRoles({ ...ASSIGN });
+    session.setRole('blind');
+    conn.audio('p2');
+    expect(log).toEqual(['a0.srcObject=stream', 'a0.play']);
+  });
+
+  it('a late element for the mute peer, for a deaf listener, is muted once and before the stream', () => {
+    const { conn, log, session } = rig();
+    session.setPeerRoles({ me: 'deaf', p1: 'mute', p2: 'blind' });
+    session.setRole('deaf');
+    conn.audio('p1');
+    expect(log).toEqual(['a0.muted=true', 'a0.srcObject=stream', 'a0.play']);
+  });
+
+  it('the gate restoring muted=false on a role change does not unmute the mute peer', () => {
+    const { conn, made, session } = rig();
+    conn.audio('p1');
+    conn.audio('p2');
+    session.setPeerRoles({ ...ASSIGN });
+    session.setRole('deaf');
+    expect(made.map((a) => a.muted)).toEqual([true, true]);
+    session.setRole('blind');
+    expect(made.map((a) => a.muted)).toEqual([true, false]); // p2 is heard again, p1 never
+    session.setRole('mute');
+    expect(made.map((a) => a.muted)).toEqual([true, false]);
+  });
+
+  it('role rotation: a new assignment mutes the new mute peer and frees the old one', () => {
+    const { conn, made, session } = rig();
+    conn.audio('p1');
+    conn.audio('p2');
+    session.setRole('blind');
+    session.setPeerRoles({ me: 'blind', p1: 'mute', p2: 'deaf' });
+    expect(made.map((a) => a.muted)).toEqual([true, false]);
+    session.setPeerRoles({ me: 'blind', p1: 'deaf', p2: 'mute' });
+    expect(made.map((a) => a.muted)).toEqual([false, true]);
+  });
+
+  it('setRole(null) (lobby, results) and setPeerRoles(null) put everybody back on', () => {
+    const { conn, made, session } = rig();
+    conn.audio('p1');
+    conn.audio('p2');
+    session.setPeerRoles({ ...ASSIGN });
+    session.setRole('blind');
+    expect(made[0].muted).toBe(true);
+    session.setRole(null);
+    expect(made.map((a) => a.muted)).toEqual([false, false]);
+    conn.audio('p3'); // while no role is set nothing is muted, even with the roles still known
+    expect(made[2].muted).toBe(false);
+    session.setRole('blind');
+    expect(made[0].muted).toBe(true);
+    session.setPeerRoles(null);
+    expect(made.map((a) => a.muted)).toEqual([false, false, false]);
+  });
+
+  it('a peer whose role is unknown is not muted', () => {
+    const { conn, made, session } = rig();
+    session.setRole('blind');
+    conn.audio('p1');
+    conn.audio('stranger');
+    session.setPeerRoles({ me: 'blind', p1: 'deaf' });
+    expect(made.map((a) => a.muted)).toEqual([false, false]);
+    session.setPeerRoles({});
+    expect(made.map((a) => a.muted)).toEqual([false, false]);
+  });
+
+  it('inherited names are not roles: __proto__ and constructor', () => {
+    const { conn, made, session } = rig();
+    session.setRole('blind');
+    conn.audio('__proto__');
+    conn.audio('constructor');
+    session.setPeerRoles({ p1: 'mute' });
+    expect(made.map((a) => a.muted)).toEqual([false, false]);
+  });
+
+  it('the local mute player: own mic off and still hears the others (its rule is unchanged)', () => {
+    const { conn, made, session, mic } = rig();
+    conn.audio('p1');
+    conn.audio('p2');
+    session.setPeerRoles({ me: 'mute', p1: 'blind', p2: 'deaf' });
+    session.setRole('mute');
+    expect(mic?.enabled).toBe(false);
+    expect(made.map((a) => a.muted)).toEqual([false, false]);
+  });
+
+  it('keeps a copy: changing the object afterwards changes nothing', () => {
+    const { conn, made, session } = rig();
+    conn.audio('p1');
+    const roles: Record<string, 'blind' | 'deaf' | 'mute'> = { p1: 'mute' };
+    session.setRole('blind');
+    session.setPeerRoles(roles);
+    roles['p1'] = 'deaf';
+    session.setRole('blind');
+    expect(made[0].muted).toBe(true);
+  });
+
+  it('after destroy setPeerRoles does nothing', () => {
+    const { conn, made, session, log } = rig();
+    conn.audio('p1');
+    session.destroy();
+    const before = [...log];
+    session.setPeerRoles({ p1: 'mute' });
+    expect(log).toEqual(before);
+    expect(made[0].muted).toBe(false);
+  });
+});
+
+describe('a refused play() is retried on the next user gesture', () => {
+  const gesture = (type: string): void => {
+    document.dispatchEvent(new Event(type, { bubbles: true }));
+  };
+  const refuse = (): Promise<void> => Promise.reject(new Error('NotAllowedError'));
+  const flush = async (): Promise<void> => {
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+  const rigPlay = (behaviour: () => Promise<void> | void) => {
+    const playCalls = vi.fn(behaviour);
+    return { playCalls, ...rig({ enabled: true }, playCalls) };
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('nothing is listening while nothing is pending', async () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const { conn } = rigPlay(() => Promise.resolve());
+    conn.audio('p1');
+    await flush();
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it('a rejected play() adds ONE capturing listener set and the next pointerdown plays again', async () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const { conn, playCalls } = rigPlay(refuse);
+    conn.audio('p1');
+    conn.audio('p2');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(2);
+    const gestureAdds = add.mock.calls.filter(([type]) => type === 'pointerdown' || type === 'keydown');
+    expect(gestureAdds.map((c) => c[0]).sort()).toEqual(['keydown', 'pointerdown']); // once, not once per element
+    expect(gestureAdds.every((c) => c[2] === true)).toBe(true); // capturing
+    playCalls.mockImplementation(() => Promise.resolve());
+    gesture('pointerdown');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(4); // both pending elements retried
+  });
+
+  it('keydown retries too, and nothing listens once everything plays', async () => {
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const { conn, playCalls } = rigPlay(refuse);
+    conn.audio('p1');
+    await flush();
+    playCalls.mockImplementation(() => Promise.resolve());
+    gesture('keydown');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(2);
+    expect(remove.mock.calls.filter(([type]) => type === 'keydown' || type === 'pointerdown').length).toBeGreaterThanOrEqual(2);
+    gesture('keydown');
+    gesture('pointerdown');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(2); // nothing pending, nothing listening
+  });
+
+  it('pointerup counts too: on touch screens only the release is a user activation', async () => {
+    const { conn, playCalls } = rigPlay(refuse);
+    conn.audio('p1');
+    await flush();
+    gesture('pointerdown'); // refused again: no activation yet
+    await flush();
+    playCalls.mockImplementation(() => Promise.resolve());
+    gesture('pointerup');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(3);
+    gesture('pointerup');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(3);
+  });
+
+  it('a retry that is refused again is swallowed and the element waits for the next gesture', async () => {
+    const { conn, playCalls } = rigPlay(refuse);
+    conn.audio('p1');
+    await flush();
+    gesture('pointerdown');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(2);
+    gesture('pointerdown');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(3);
+  });
+
+  it('a play() that throws synchronously is retried the same way', async () => {
+    let n = 0;
+    const { conn, playCalls } = rigPlay(() => {
+      if (n++ === 0) throw new Error('boom');
+    });
+    conn.audio('p1');
+    await flush();
+    gesture('pointerdown');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(2);
+    gesture('pointerdown');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(2);
+  });
+
+  it('a peer that left is not retried, and its listener goes when nothing else is pending', async () => {
+    const { conn, playCalls } = rigPlay(refuse);
+    conn.audio('p1');
+    conn.audio('p2');
+    await flush();
+    conn.leave('p1');
+    gesture('pointerdown');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(3); // p2 only
+    conn.leave('p2');
+    gesture('pointerdown');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(3);
+  });
+
+  it('destroy removes the listeners and drops the pending elements', async () => {
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const { conn, playCalls, session } = rigPlay(refuse);
+    conn.audio('p1');
+    await flush();
+    session.destroy();
+    expect(remove.mock.calls.filter(([type]) => type === 'pointerdown')).toHaveLength(1);
+    gesture('pointerdown');
+    await flush();
+    expect(playCalls).toHaveBeenCalledTimes(1);
+  });
+
+  it('a refusal that arrives after the peer left parks nothing', async () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    let reject: (e: Error) => void = () => undefined;
+    const { conn } = rigPlay(() => new Promise<void>((_res, rej) => (reject = rej)));
+    conn.audio('p1');
+    conn.leave('p1');
+    reject(new Error('NotAllowedError'));
+    await flush();
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it('a retried element keeps its mute: the mute peer stays silent while it waits', async () => {
+    const { conn, made, session, playCalls } = rigPlay(refuse);
+    session.setPeerRoles({ me: 'blind', p1: 'mute' });
+    session.setRole('blind');
+    conn.audio('p1');
+    await flush();
+    playCalls.mockImplementation(() => Promise.resolve());
+    gesture('pointerdown');
+    await flush();
+    expect(made[0].muted).toBe(true);
   });
 });

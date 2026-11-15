@@ -841,6 +841,44 @@ describe('stop()', () => {
   });
 });
 
+describe('peerRoles: who plays which role', () => {
+  it('is null before start() on the host and before the roles on a guest, and the full table afterwards on both', () => {
+    const rig = makeRig({ start: false });
+    expect(rig.host.peerRoles()).toBeNull();
+    for (const id of IDS.slice(1)) expect(rig.guests[id].peerRoles()).toBeNull();
+    rig.host.start();
+    expect(rig.host.peerRoles()).toEqual(rig.assign);
+    for (const id of IDS.slice(1)) expect(rig.guests[id].peerRoles()).toEqual(rig.assign);
+    rig.host.stop();
+    for (const g of Object.values(rig.guests)) g.stop();
+  });
+
+  it('returns a copy: changing it changes nothing inside the games', () => {
+    const rig = makeRig();
+    const fromHost = rig.host.peerRoles()!;
+    fromHost[HOST] = 'mute';
+    delete fromHost[IDS[1]];
+    expect(rig.host.peerRoles()).toEqual(rig.assign);
+    const g = rig.guests[IDS[1]];
+    const fromGuest = g.peerRoles()!;
+    fromGuest[IDS[2]] = 'blind';
+    expect(g.peerRoles()).toEqual(rig.assign);
+    rig.host.stop();
+    for (const guest of Object.values(rig.guests)) guest.stop();
+  });
+
+  it('a guest keeps the first assignment: a repeated or forged roles message cannot change it', () => {
+    const rig = makeRig();
+    const g = rig.guests[IDS[1]];
+    const before = g.peerRoles();
+    rig.inject(HOST, IDS[1], { t: 'roles', assign: { [HOST]: 'mute', [IDS[1]]: g.role, [IDS[2]]: 'deaf' }, level: { ...rig.level, seed: 0 } });
+    rig.inject(IDS[2], IDS[1], { t: 'roles', assign: { [HOST]: 'blind', [IDS[1]]: 'blind', [IDS[2]]: 'blind' }, level: { ...rig.level, seed: 0 } });
+    expect(g.peerRoles()).toEqual(before);
+    rig.host.stop();
+    for (const guest of Object.values(rig.guests)) guest.stop();
+  });
+});
+
 describe('GuestGame constructed before the host starts', () => {
   it('works: roles and views arrive after the guests are listening', () => {
     const rig = makeRig({ start: false });

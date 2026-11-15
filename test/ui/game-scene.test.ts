@@ -94,6 +94,8 @@ class FakeGame implements Participant {
   emotes: EmoteId[] = [];
   left: number | null = null;
   role: Role | null = null;
+  /** What peerRoles() answers: null until the roles are known. */
+  table: Record<PeerId, Role> | null = null;
 
   onView(cb: (v: RoleView, ms: number | null) => void): void {
     this.viewCbs.push(cb);
@@ -118,6 +120,9 @@ class FakeGame implements Participant {
   }
   sendEmote(id: EmoteId): void {
     this.emotes.push(id);
+  }
+  peerRoles(): Record<PeerId, Role> | null {
+    return this.table === null ? null : { ...this.table };
   }
   stop(): void {
     // the real games stop the network here; nothing to do
@@ -222,6 +227,8 @@ interface Rig {
   clock: FakeClock;
   frames: FakeFrames;
   roles: (Role | null)[];
+  /** Every setPeerRoles call, in order, interleaved with the setRole calls as 'roles:<json>' / 'role:<r>'. */
+  voiceLog: string[];
   ended: [EndReason, EndStats | undefined][];
   scene: { destroy(): void };
   info: GameStartInfo;
@@ -237,6 +244,7 @@ const mount = (
   const clock = new FakeClock();
   const frames = new FakeFrames();
   const roles: (Role | null)[] = [];
+  const voiceLog: string[] = [];
   const ended: [EndReason, EndStats | undefined][] = [];
   const info = {
     role: 'guest',
@@ -250,6 +258,10 @@ const mount = (
     voice: {
       setRole: (r) => {
         roles.push(r);
+        voiceLog.push(`role:${String(r)}`);
+      },
+      setPeerRoles: (a) => {
+        voiceLog.push(`peers:${a === null ? 'null' : JSON.stringify(a)}`);
       },
     },
     now: clock.now,
@@ -266,7 +278,7 @@ const mount = (
     ...opts.extra,
   };
   const scene = createGameScene(root, info, deps);
-  return { root, game, clock, frames, roles, ended, scene, info };
+  return { root, game, clock, frames, roles, voiceLog, ended, scene, info };
 };
 
 const q = <T extends HTMLElement = HTMLElement>(root: ParentNode, testid: string): T => {
@@ -1370,6 +1382,112 @@ describe('connection events during a game', () => {
     expect(onSignalingClosed).not.toHaveBeenCalled();
     expect(rig.root.querySelector('[role="alert"]')).toBeNull();
     expect(rig.root.querySelector('canvas')).not.toBeNull();
+  });
+});
+
+describe('table roles: voice and emote labels', () => {
+  const TABLE: Record<PeerId, Role> = { me: 'blind', p1: 'mute', p2: 'deaf' };
+
+  it('a guest (roles known at mount) hands the table to the voice session before its own role, and clears it when it stops', () => {
+    const unknown = mount({ role: 'blind' });
+    expect(unknown.voiceLog).toEqual(['peers:null', 'role:blind']); // no table yet: null, then the rule
+    const withTable = (() => {
+      const root = document.createElement('div');
+      document.body.append(root);
+      const game = new FakeGame();
+      game.role = 'blind';
+      game.table = TABLE;
+      const log: string[] = [];
+      const scene = createGameScene(root, { role: 'guest', conn: { id: 'me' } as unknown as RoomConnection, game: game as unknown as GameStartInfo['game'], level: LEVEL, code: 'ABCD', micTrack: null }, {
+        voice: { setRole: (r) => log.push(`role:${String(r)}`), setPeerRoles: (a) => log.push(`peers:${a === null ? 'null' : JSON.stringify(a)}`) },
+        now: () => 0,
+        onEnded: () => undefined,
+      });
+      return { log, scene };
+    })();
+    expect(withTable.log).toEqual([`peers:${JSON.stringify(TABLE)}`, 'role:blind']);
+    withTable.scene.destroy();
+    expect(withTable.log[withTable.log.length - 1]).toBe('peers:null');
+  });
+
+  it('a host (roles known only after start) passes the table again on its first view', () => {
+    const rig = mount(); // game.role null: the host has not started
+    expect(rig.voiceLog).toEqual(['peers:null']);
+    rig.game.table = TABLE;
+    rig.game.role = 'blind';
+    rig.game.pushView(blindView);
+    expect(rig.voiceLog).toEqual(['peers:null', `peers:${JSON.stringify(TABLE)}`, 'role:blind']);
+  });
+
+  it('leaving the scene (end of the game or destroy) clears the table', () => {
+    const rig = blindRig();
+    rig.scene.destroy();
+    expect(rig.voiceLog[rig.voiceLog.length - 1]).toBe('peers:null');
+    const ended = blindRig();
+    ended.game.endedCbs.forEach((cb) => cb('won'));
+    expect(ended.voiceLog[ended.voiceLog.length - 1]).toBe('peers:null');
+  });
+
+  const SCREENS: [string, (opts?: Parameters<typeof mount>[0]) => Rig][] = [
+    ['blind', blindRig],
+    ['deaf', deafRig],
+    ['mute', muteRig],
+  ];
+
+  it('the same sender gets the same role label on the blind, deaf and mute screens', () => {
+    for (const [name, make] of SCREENS) {
+      const rig = make();
+      rig.game.table = TABLE;
+      rig.game.emote('p1', 'yes');
+      expect(q(rig.root, 'game-toast').textContent, name).toBe(t('game.emoteFrom', { player: t('role.mute'), emote: t('emote.yes') }));
+      rig.clock.advance(0);
+      expect(q(rig.root, 'game-live').textContent, name).toBe(`${t('role.mute')}: ${t('emote.yes')}`);
+      rig.game.emote('p2', 'no');
+      expect(q(rig.root, 'game-toast').textContent, name).toBe(`${t('role.deaf')}: ${t('emote.no')}`);
+      rig.game.emote('me', 'wave');
+      expect(q(rig.root, 'game-toast').textContent, name).toBe(`${t('role.blind')}: ${t('emote.wave')}`);
+    }
+  });
+
+  it('the order in which senders first speak no longer changes the label', () => {
+    const a = blindRig();
+    const b = blindRig();
+    a.game.table = TABLE;
+    b.game.table = TABLE;
+    a.game.emote('p2', 'wave');
+    a.game.emote('p1', 'yes');
+    b.game.emote('p1', 'yes');
+    expect(q(a.root, 'game-toast').textContent).toBe(q(b.root, 'game-toast').textContent);
+  });
+
+  it('labels follow the language', () => {
+    setLang('fr');
+    const rig = blindRig();
+    rig.game.table = TABLE;
+    rig.game.emote('p1', 'yes');
+    expect(q(rig.root, 'game-toast').textContent).toBe(`${fr['role.mute']} : ${fr['emote.yes']}`);
+  });
+
+  it('falls back to Player N when the table is unknown or the sender is not in it', () => {
+    const rig = blindRig();
+    rig.game.emote('p1', 'wave');
+    expect(q(rig.root, 'game-toast').textContent).toBe(t('game.emoteFrom', { player: t('game.player', { n: 1 }), emote: t('emote.wave') }));
+    rig.game.table = TABLE;
+    rig.game.emote('stranger', 'wave');
+    expect(q(rig.root, 'game-toast').textContent).toBe(t('game.emoteFrom', { player: t('game.player', { n: 2 }), emote: t('emote.wave') }));
+  });
+
+  it('hostile ids and inherited names stay text and never pick a role', () => {
+    const rig = blindRig();
+    const evil = '<img src=x onerror=alert(1)>';
+    rig.game.table = { [evil]: 'mute', ...TABLE };
+    rig.game.emote(evil, 'yes');
+    expect(rig.root.querySelector('img')).toBeNull();
+    expect(q(rig.root, 'game-toast').textContent).toBe(`${t('role.mute')}: ${t('emote.yes')}`); // the ROLE is shown, never the id
+    rig.game.emote('__proto__', 'no');
+    rig.game.emote('constructor', 'no');
+    expect(q(rig.root, 'game-toast').textContent).toBe(t('game.emoteFrom', { player: t('game.player', { n: 2 }), emote: t('emote.no') }));
+    expect(rig.root.innerHTML).not.toContain('onerror');
   });
 });
 

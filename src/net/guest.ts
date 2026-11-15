@@ -27,6 +27,7 @@ export class GuestGame implements Participant {
   private lastHostMsgAt = 0;
   private lastCheckAt = 0;
   private roleValue: Role | null = null;
+  private assignValue: Record<PeerId, Role> | null = null;
   private levelValue: LevelDef | null = null;
   private ended = false;
   private stopped = false;
@@ -71,6 +72,10 @@ export class GuestGame implements Participant {
   /** Assigned by the host's first `roles` message, null before that. */
   get role(): Role | null {
     return this.roleValue;
+  }
+  /** Who plays which role (public to the table), a copy; null until the host's `roles` arrive. */
+  peerRoles(): Record<PeerId, Role> | null {
+    return this.assignValue === null ? null : { ...this.assignValue };
   }
   /** Level info from the host (its seed is blanked: guests never get it). */
   get level(): LevelDef | null {
@@ -149,6 +154,7 @@ export class GuestGame implements Participant {
         const role = msg.assign[this.t.id];
         if (this.roleValue !== null || role === undefined) return;
         this.roleValue = role;
+        this.assignValue = { ...msg.assign };
         this.levelValue = msg.level;
         for (const cb of [...this.rolesCbs]) cb(role, msg.level);
         return;
