@@ -13,6 +13,15 @@ export const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
 
 const CLOSE_FULL = 4001;
 
+/** Pre-connection fetches must never leave "Connecting..." hanging. */
+export const PREFLIGHT_TIMEOUT_MS = 5000;
+export const ICE_TIMEOUT_MS = 5000;
+export const CREATE_TIMEOUT_MS = 8000;
+/** The signaling keepalive: the text frame `ping` (the Worker answers `pong`) every 25 s. */
+export const PING_INTERVAL_MS = 25_000;
+/** A data channel that has not opened this long after its link was created is given up on. */
+export const LINK_TIMEOUT_MS = 20_000;
+
 /** HTTP status of a failed join to the error callers see. */
 export function joinStatusError(status: number): Error {
   return new Error(status === 404 ? 'no-room' : 'network');
@@ -32,13 +41,13 @@ export function roomWsUrl(workerUrl: string, code: string): string {
 /**
  * A browser WebSocket cannot read the HTTP status of a failed upgrade, so ask the same url
  * with a plain GET first: the Worker answers 404 for an unknown room. Best effort: only a
- * 404 stops the join, anything else (including an unreachable fetch) lets the socket decide.
+ * 404 stops the join, anything else (including an unreachable fetch or a 5 s timeout) lets the socket decide.
  */
 export async function preflightRoom(workerUrl: string, code: string, fetchFn: typeof fetch = fetch): Promise<void> {
   const url = `${base(workerUrl)}/rooms/${encodeURIComponent(code)}/ws`;
   let status: number;
   try {
-    status = (await fetchFn(url, { method: 'GET' })).status;
+    status = (await fetchFn(url, { method: 'GET', signal: AbortSignal.timeout(PREFLIGHT_TIMEOUT_MS) })).status;
   } catch {
     return;
   }
@@ -51,10 +60,10 @@ const isIceServer = (v: unknown): v is RTCIceServer => {
   return typeof urls === 'string' || (Array.isArray(urls) && urls.length > 0 && urls.every((u) => typeof u === 'string'));
 };
 
-/** `GET /turn`, falling back to public STUN when anything goes wrong. */
+/** `GET /turn`, falling back to public STUN when anything goes wrong (a 5 s timeout included). */
 export async function loadIceServers(workerUrl: string, fetchFn: typeof fetch = fetch): Promise<RTCIceServer[]> {
   try {
-    const res = await fetchFn(`${base(workerUrl)}/turn`);
+    const res = await fetchFn(`${base(workerUrl)}/turn`, { signal: AbortSignal.timeout(ICE_TIMEOUT_MS) });
     if (!res.ok) return FALLBACK_ICE_SERVERS;
     const body = (await res.json()) as { iceServers?: unknown } | null;
     const list = body?.iceServers;
@@ -65,11 +74,11 @@ export async function loadIceServers(workerUrl: string, fetchFn: typeof fetch = 
   }
 }
 
-/** `POST /rooms`: a fresh room code. */
+/** `POST /rooms`: a fresh room code. Fails with Error('network') after 8 s. */
 export async function createRoom(workerUrl: string, fetchFn: typeof fetch = fetch): Promise<string> {
   let res: Response;
   try {
-    res = await fetchFn(`${base(workerUrl)}/rooms`, { method: 'POST' });
+    res = await fetchFn(`${base(workerUrl)}/rooms`, { method: 'POST', signal: AbortSignal.timeout(CREATE_TIMEOUT_MS) });
   } catch {
     throw new Error('network');
   }
@@ -96,6 +105,16 @@ export interface WebSocketLike {
 }
 export type WebSocketCtor = new (url: string) => WebSocketLike;
 
+/** Timer functions, injectable so keepalive tests run on fake time. */
+export interface IntervalTimers {
+  setInterval(fn: () => void, ms: number): unknown;
+  clearInterval(handle: unknown): void;
+}
+const realTimers: IntervalTimers = {
+  setInterval: (fn, ms) => setInterval(fn, ms),
+  clearInterval: (h) => clearInterval(h as ReturnType<typeof setInterval>),
+};
+
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
@@ -114,13 +133,19 @@ export class RoomSignaling {
   private isReady = false;
   private gotPeers = false;
   private closed = false;
+  private closedLocally = false;
+  private pingHandle: unknown = null;
   private resolveReady!: () => void;
   private rejectReady!: (e: Error) => void;
   private peersCbs: ((ids: PeerId[]) => void)[] = [];
   private messageCbs: ((from: PeerId, msg: unknown) => void)[] = [];
   private closeCbs: ((code: number, reason: string) => void)[] = [];
 
-  constructor(url: string, WS: WebSocketCtor) {
+  constructor(
+    url: string,
+    WS: WebSocketCtor,
+    private readonly timers: IntervalTimers = realTimers,
+  ) {
     this.ready = new Promise<void>((resolve, reject) => {
       this.resolveReady = resolve;
       this.rejectReady = reject;
@@ -133,8 +158,9 @@ export class RoomSignaling {
     };
     this.ws.onclose = (ev) => {
       this.closed = true;
+      this.stopPing();
       if (!this.isReady) this.rejectReady(closeCodeError(ev.code, ev.reason));
-      for (const cb of [...this.closeCbs]) cb(ev.code, ev.reason);
+      if (!this.closedLocally) for (const cb of [...this.closeCbs]) cb(ev.code, ev.reason);
     };
   }
 
@@ -144,6 +170,7 @@ export class RoomSignaling {
   onMessage(cb: (from: PeerId, msg: unknown) => void): void {
     this.messageCbs.push(cb);
   }
+  /** The socket closed on its own (network drop, Worker close). NOT called after our own `close()`. */
   onClose(cb: (code: number, reason: string) => void): void {
     this.closeCbs.push(cb);
   }
@@ -155,11 +182,33 @@ export class RoomSignaling {
 
   close(): void {
     this.closed = true;
+    this.closedLocally = true;
+    this.stopPing();
     this.ws.close();
+  }
+
+  /** Keepalive: an idle phone connection loses its carrier NAT mapping, a ping every 25 s keeps it. */
+  private startPing(): void {
+    if (this.pingHandle !== null || this.closed) return;
+    this.pingHandle = this.timers.setInterval(() => {
+      if (this.closed) return;
+      try {
+        this.ws.send('ping');
+      } catch {
+        // a socket that cannot send is closing; its close event reports it
+      }
+    }, PING_INTERVAL_MS);
+  }
+
+  private stopPing(): void {
+    if (this.pingHandle === null) return;
+    this.timers.clearInterval(this.pingHandle);
+    this.pingHandle = null;
   }
 
   private onFrame(data: unknown): void {
     if (typeof data !== 'string') return;
+    if (data === 'pong') return; // the keepalive answer
     let parsed: unknown;
     try {
       parsed = JSON.parse(data);
@@ -193,9 +242,101 @@ export class RoomSignaling {
     }
     if (!this.isReady && this.id !== null && this.gotPeers) {
       this.isReady = true;
+      this.startPing();
       this.resolveReady();
     }
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Link bookkeeping (pure, unit tested)                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Which links to keep and which to drop when the Worker's peer list says `ids`.
+ * The list only speaks for the SIGNALING socket: a peer whose socket dropped may still be
+ * connected peer to peer, so a link that has opened stays until its own data channel or
+ * connection says it is gone. Only a link that never opened and is no longer listed is
+ * dropped (nothing will ever finish its handshake). Links already `left` are left alone.
+ */
+export function reconcileLinks<L extends { id: PeerId; wasOpen: boolean; left: boolean }>(
+  links: Iterable<L>,
+  ids: readonly PeerId[],
+): { keep: L[]; drop: L[] } {
+  const keep: L[] = [];
+  const drop: L[] = [];
+  for (const link of links) {
+    if (ids.includes(link.id) || link.wasOpen || link.left) keep.push(link);
+    else drop.push(link);
+  }
+  return { keep, drop };
+}
+
+export interface LinkWatchOptions {
+  timeoutMs: number;
+  setTimer: (fn: () => void, ms: number) => unknown;
+  clearTimer: (handle: unknown) => void;
+  onFail: (id: PeerId) => void;
+}
+
+export interface LinkWatch {
+  /** Begin the countdown for a new link. A second start for a known id does nothing. */
+  start(id: PeerId): void;
+  /** The link opened: it can no longer fail through the watch. */
+  opened(id: PeerId): void;
+  /** The connection failed. Reports at once, but only when the link never opened. */
+  failed(id: PeerId): void;
+  /** Forget a link that was dropped on purpose (no report). */
+  cancel(id: PeerId): void;
+  /** Clear every timer (connection closed). */
+  stop(): void;
+}
+
+/**
+ * Per-link watchdog: a link that has not opened `timeoutMs` after `start`, or reports
+ * `failed` before it ever opened, is reported once through `onFail`. Each id reports at most
+ * once, ever.
+ */
+export function createLinkWatch(opts: LinkWatchOptions): LinkWatch {
+  const timers = new Map<PeerId, unknown>();
+  const settled = new Set<PeerId>();
+  let stopped = false;
+
+  const settle = (id: PeerId): boolean => {
+    if (!timers.has(id)) return false;
+    opts.clearTimer(timers.get(id));
+    timers.delete(id);
+    settled.add(id);
+    return true;
+  };
+
+  return {
+    start(id) {
+      if (stopped || timers.has(id) || settled.has(id)) return;
+      timers.set(
+        id,
+        opts.setTimer(() => {
+          if (settle(id)) opts.onFail(id);
+        }, opts.timeoutMs),
+      );
+    },
+    opened(id) {
+      settle(id);
+      settled.add(id);
+    },
+    failed(id) {
+      if (settle(id)) opts.onFail(id);
+    },
+    cancel(id) {
+      settle(id);
+      settled.add(id);
+    },
+    stop() {
+      stopped = true;
+      for (const h of timers.values()) opts.clearTimer(h);
+      timers.clear();
+    },
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -226,8 +367,11 @@ const asSignal = (m: unknown): SignalMsg | null => {
 };
 
 /** One RTCPeerConnection per other peer; the LOWER id offers. Implements the game Transport. */
-class RoomMesh implements RoomConnection {
+export class RoomMesh implements RoomConnection {
   private readonly links = new Map<PeerId, Link>();
+  private readonly watch: LinkWatch;
+  private linkFailedCbs: ((id: PeerId) => void)[] = [];
+  private signalingClosedCbs: ((code: number, reason: string) => void)[] = [];
   private messageCbs: ((from: PeerId, msg: NetMsg) => void)[] = [];
   private leftCbs: ((id: PeerId) => void)[] = [];
   private audioCbs: ((id: PeerId, stream: MediaStream) => void)[] = [];
@@ -236,7 +380,18 @@ class RoomMesh implements RoomConnection {
     private readonly sig: RoomSignaling,
     private readonly iceServers: RTCIceServer[],
     private readonly localAudio: MediaStreamTrack | null,
+    linkTimeoutMs: number = LINK_TIMEOUT_MS,
   ) {
+    this.watch = createLinkWatch({
+      timeoutMs: linkTimeoutMs,
+      setTimer: (fn, ms) => setTimeout(fn, ms),
+      clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+      onFail: (id) => this.failLink(id),
+    });
+    sig.onClose((code, reason) => {
+      // The signaling socket dropped. Open peer to peer links carry on; the UI decides what to show.
+      for (const cb of [...this.signalingClosedCbs]) cb(code, reason);
+    });
     sig.onPeers((ids) => this.syncPeers(ids));
     sig.onMessage((from, msg) => {
       void this.onSignal(from, msg);
@@ -272,7 +427,17 @@ class RoomMesh implements RoomConnection {
     this.audioCbs.push(cb);
   }
 
+  /** The signaling socket closed on its own. Open links stay up: the game continues peer to peer. */
+  onSignalingClosed(cb: (code: number, reason: string) => void): void {
+    this.signalingClosedCbs.push(cb);
+  }
+  /** A link never opened within 20 s, or failed before it opened. Fires once per link; the link is torn down and not retried. */
+  onLinkFailed(cb: (id: PeerId) => void): void {
+    this.linkFailedCbs.push(cb);
+  }
+
   close(): void {
+    this.watch.stop();
     for (const link of this.links.values()) {
       link.left = true; // closing on purpose is not a peer leaving
       link.pc.close();
@@ -289,15 +454,23 @@ class RoomMesh implements RoomConnection {
       const link = this.createLink(id);
       if (me < id) void this.offer(link);
     }
-    for (const link of [...this.links.values()]) {
-      if (!ids.includes(link.id)) this.drop(link);
-    }
+    for (const link of reconcileLinks(this.links.values(), ids).drop) this.drop(link);
   }
 
   private drop(link: Link): void {
+    this.watch.cancel(link.id);
     this.links.delete(link.id);
     link.pc.close();
     this.markLeft(link);
+  }
+
+  /** The watchdog gave up on a link that never opened. */
+  private failLink(id: PeerId): void {
+    const link = this.links.get(id);
+    if (link === undefined || link.left || link.wasOpen) return;
+    link.left = true;
+    link.pc.close();
+    for (const cb of [...this.linkFailedCbs]) cb(id);
   }
 
   private markLeft(link: Link): void {
@@ -310,6 +483,7 @@ class RoomMesh implements RoomConnection {
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
     const link: Link = { id, pc, channel: null, remoteSet: false, pendingIce: [], wasOpen: false, left: false };
     this.links.set(id, link);
+    this.watch.start(id);
     pc.onicecandidate = (ev) => {
       if (ev.candidate) this.sig.send({ kind: 'ice', to: id, data: ev.candidate.toJSON() });
     };
@@ -321,7 +495,8 @@ class RoomMesh implements RoomConnection {
       if (ev.channel.label === 'game') this.attach(link, ev.channel);
     };
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') this.markLeft(link);
+      if (pc.connectionState === 'failed' && !link.wasOpen) this.watch.failed(id);
+      else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') this.markLeft(link);
     };
     if (this.localAudio !== null) pc.addTrack(this.localAudio, new MediaStream([this.localAudio]));
     return link;
@@ -329,10 +504,8 @@ class RoomMesh implements RoomConnection {
 
   private attach(link: Link, channel: RTCDataChannel): void {
     link.channel = channel;
-    if (channel.readyState === 'open') link.wasOpen = true;
-    channel.onopen = () => {
-      link.wasOpen = true;
-    };
+    if (channel.readyState === 'open') this.opened(link);
+    channel.onopen = () => this.opened(link);
     channel.onclose = () => this.markLeft(link);
     channel.onmessage = (ev) => {
       if (typeof ev.data !== 'string') return;
@@ -348,6 +521,11 @@ class RoomMesh implements RoomConnection {
     };
   }
 
+  private opened(link: Link): void {
+    link.wasOpen = true;
+    this.watch.opened(link.id);
+  }
+
   private async offer(link: Link): Promise<void> {
     try {
       if (this.localAudio === null) link.pc.addTransceiver('audio', { direction: 'recvonly' });
@@ -356,7 +534,7 @@ class RoomMesh implements RoomConnection {
       const d = link.pc.localDescription;
       if (d) this.sig.send({ kind: 'offer', to: link.id, data: { type: d.type, sdp: d.sdp } });
     } catch {
-      this.markLeft(link);
+      this.watch.failed(link.id); // the offer never went out: no point waiting 20 s
     }
   }
 
