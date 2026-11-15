@@ -28,13 +28,13 @@ describe('manual strings', () => {
     }
   });
 
-  it('has the scene keys and the five color names in both languages', () => {
+  it('has the scene keys, the five wire color names and the four button color names in both languages', () => {
     const keys = [
       'manual.empty',
       'manual.prev',
       'manual.next',
       'manual.column',
-      ...(['red', 'blue', 'yellow', 'green', 'white'] as const).map((c) => `color.${c}`),
+      ...(['red', 'blue', 'yellow', 'green', 'white', 'orange', 'teal', 'purple', 'pink'] as const).map((c) => `color.${c}`),
     ];
     for (const key of keys) {
       expect(en[key], `en ${key}`).toBeTruthy();
@@ -54,9 +54,9 @@ describe('manual strings', () => {
     setLang('en');
   });
 
-  it('the manual covers wires 3 to 6 (one rule per wire count), button 6 lines, symbols 4, code 5', () => {
+  it('the manual covers wires 3 to 6 (one rule per wire count), button 5 lines, symbols 4, code 5', () => {
     expect(MODULES.wires.manual().rules).toEqual([3, 4, 5, 6].map((n) => `manual.wires.rule.${n}`));
-    expect(MODULES.button.manual().rules).toHaveLength(6);
+    expect(MODULES.button.manual().rules).toHaveLength(5);
     expect(MODULES.symbols.manual().rules).toHaveLength(4);
     expect(MODULES.code.manual().rules).toHaveLength(5);
   });
@@ -185,16 +185,15 @@ describe('manual text equals the wires rule code', () => {
 describe('manual text equals the button rule code', () => {
   type Action = 'tap' | 'hold';
   const LINES: { applies: (c: ButtonColor, l: ButtonLabel) => boolean; action: Action; fr: string[]; en: string[] }[] = [
-    { applies: (c, l) => c === 'white' && l === 'ABORT', action: 'tap', fr: ['bouton blanc', 'ABORT', 'appui bref'], en: ['white button', 'ABORT', 'tap'] },
-    { applies: (c) => c === 'blue', action: 'hold', fr: ['bouton bleu', 'appui long'], en: ['blue button', 'hold'] },
-    { applies: (_c, l) => l === 'ABORT', action: 'hold', fr: ['ABORT', 'appui long'], en: ['ABORT', 'hold'] },
-    { applies: (c, l) => c === 'yellow' && l === 'PRESS', action: 'hold', fr: ['bouton jaune', 'PRESS', 'appui long'], en: ['yellow button', 'PRESS', 'hold'] },
+    { applies: (c, l) => l === 'GO' && (c === 'purple' || c === 'pink'), action: 'hold', fr: ['bouton violet ou rose', 'GO', 'appui long'], en: ['purple or pink button', 'GO', 'hold'] },
+    { applies: (c, l) => l === 'GO' || c === 'pink', action: 'tap', fr: ['tout autre bouton', 'GO', 'tout bouton rose', 'appui bref'], en: ['any other button', 'GO', 'any pink button', 'tap'] },
+    { applies: (c) => c === 'orange' || c === 'teal', action: 'hold', fr: ['bouton orange ou turquoise', 'appui long'], en: ['orange or teal button', 'hold'] },
     { applies: () => true, action: 'tap', fr: ['Tout le reste', 'appui bref'], en: ['Anything else', 'tap'] },
   ];
 
   it('the first line that applies gives needsHold, for all 12 color and label pairs', () => {
-    for (const c of ['red', 'blue', 'yellow', 'white'] as const) {
-      for (const l of ['HOLD', 'PRESS', 'ABORT'] as const) {
+    for (const c of ['orange', 'teal', 'purple', 'pink'] as const) {
+      for (const l of ['GO', 'STOP', 'WAIT'] as const) {
         const first = LINES.find((x) => x.applies(c, l));
         expect(first?.action === 'hold', `${c}/${l}`).toBe(needsHold(c, l));
       }
@@ -202,11 +201,12 @@ describe('manual text equals the button rule code', () => {
   });
 
   for (const lang of ['fr', 'en'] as const) {
-    it(`rules 1 to 5 (${lang}) carry the five lines in order, each with its words`, () => {
+    it(`rules 1 to 4 (${lang}) carry the four lines in order, each with its words`, () => {
       setLang(lang);
-      const rules = [1, 2, 3, 4, 5].map((n) => manualText(`manual.button.rule.${n}`));
+      const rules = [1, 2, 3, 4].map((n) => manualText(`manual.button.rule.${n}`));
       const lines = [numbered(rules[0])[0], ...rules.slice(1)];
-      expect(lines).toHaveLength(5);
+      expect(lines).toHaveLength(LINES.length);
+      expect(rules[0].split('\n')[0]).toContain('(GO, STOP');
       for (const [i, line] of lines.entries()) {
         expect(line.startsWith(`${i + 1}. `), `${lang} line ${i + 1}`).toBe(true);
         for (const frag of LINES[i][lang]) expect(line.toLowerCase(), `${lang} line ${i + 1}`).toContain(frag.toLowerCase());
@@ -214,9 +214,9 @@ describe('manual text equals the button rule code', () => {
       setLang('en');
     });
 
-    it(`rule 6 (${lang}) states the tap and hold gestures and the digit rule`, () => {
+    it(`rule 5 (${lang}) states the tap and hold gestures and the digit rule`, () => {
       setLang(lang);
-      const rule = manualText('manual.button.rule.6');
+      const rule = manualText('manual.button.rule.5');
       if (lang === 'en') {
         expect(rule.toLowerCase()).toContain('tap');
         expect(rule).toContain('hold');
@@ -379,7 +379,7 @@ describe('createManual', () => {
     next().click();
     expect(title()).toBe(t('manual.button.title'));
     expect(indicator()).toBe('2/4');
-    expect(qa(root, 'manual-rule')).toHaveLength(6);
+    expect(qa(root, 'manual-rule')).toHaveLength(5);
     next().click();
     next().click();
     expect(title()).toBe(t('manual.code.title'));

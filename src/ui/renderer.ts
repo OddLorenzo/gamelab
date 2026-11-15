@@ -45,7 +45,7 @@ export interface Pointer {
 }
 
 /**
- * Wire and button colors on the dark bomb body. Lightness is spread on purpose (red darkest,
+ * Wire colors on the dark bomb body. Lightness is spread on purpose (red darkest,
  * white lightest) so the five stay apart for color-blind players, and `drawDeaf` also gives each
  * wire color its own pattern: red solid, blue dashed, yellow dotted, green double line, white thick.
  */
@@ -56,6 +56,20 @@ export const WIRE_COLORS: Record<string, string> = {
   green: '#4fd68a',
   white: '#f6f6f6',
 };
+
+/**
+ * Button colors. Color-blind players tell them apart by the notches on the rim of the button
+ * (`BUTTON_NOTCHES`: orange 1, teal 2, purple 3, pink 4), not by the hue alone.
+ */
+export const BUTTON_COLORS: Record<string, string> = {
+  orange: '#ff8a1f',
+  teal: '#17b3a3',
+  purple: '#9a5cf0',
+  pink: '#ff7eb9',
+};
+export const BUTTON_NOTCHES: Record<string, number> = { orange: 1, teal: 2, purple: 3, pink: 4 };
+/** Button colors light enough to need dark text. */
+const LIGHT_BUTTONS = new Set(['orange', 'teal', 'pink']);
 
 // Deaf palette (the deaf player sees everything, so colors are fine here).
 const BODY = '#12161b';
@@ -298,12 +312,24 @@ function drawButton(ctx: Ctx2D, m: ModuleLayout, state: ModuleState, w: number, 
   const half = Math.min(r.w, r.h) / 2;
   const face = half * 0.82;
   disc(ctx, cx, cy, half * 0.96, isPressed(pressed, m.moduleId, 0) ? PLATE_PRESSED : PLATE);
-  disc(ctx, cx, cy, face, colorOf(colorName));
+  const known = typeof colorName === 'string' && Object.hasOwn(BUTTON_COLORS, colorName);
+  disc(ctx, cx, cy, face, known ? BUTTON_COLORS[colorName] : METAL);
   ring(ctx, cx, cy, face, DARK_INK, Math.max(2, half * 0.05));
+  // Notches: short dark ticks spaced evenly round the rim, the first at the top.
+  const notches = known ? BUTTON_NOTCHES[colorName] : 0;
+  ctx.lineCap = 'butt';
+  for (let k = 0; k < notches; k++) {
+    const a = -Math.PI / 2 + (k * TAU) / notches;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * face * 0.8, cy + Math.sin(a) * face * 0.8);
+    ctx.lineTo(cx + Math.cos(a) * face, cy + Math.sin(a) * face);
+    ctx.strokeStyle = DARK_INK;
+    ctx.lineWidth = Math.max(3, face * 0.1);
+    ctx.stroke();
+  }
   if (d['held'] === true) ring(ctx, cx, cy, half * 0.93, INK, Math.max(3, half * 0.1));
-  const light = colorName === 'yellow' || colorName === 'white';
-  const ink = light ? DARK_INK : INK;
-  // The raw English words HOLD / PRESS / ABORT, exactly as the manual says them in both languages.
+  const ink = known && LIGHT_BUTTONS.has(colorName) ? DARK_INK : INK;
+  // The raw English words GO / STOP / WAIT, exactly as the manual says them in both languages.
   if (typeof d['label'] === 'string') text(ctx, d['label'], cx, cy - face * 0.18, face * 0.38, ink, { bold: true });
   if (typeof d['digit'] === 'number' && Number.isFinite(d['digit'])) {
     const by = cy + face * 0.5;

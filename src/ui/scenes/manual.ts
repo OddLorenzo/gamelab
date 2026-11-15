@@ -5,7 +5,7 @@ import { glyphChar, glyphNameKey } from '../glyphs';
 import { t } from '../i18n';
 
 const SWIPE_PX = 40;
-const COLOR_IDS = ['red', 'blue', 'yellow', 'green', 'white'] as const;
+const COLOR_IDS = ['red', 'blue', 'yellow', 'green', 'white', 'orange', 'teal', 'purple', 'pink'] as const;
 
 /**
  * A manual string in the current language. Rule texts name colors with `{red}`, `{blue}`, ...

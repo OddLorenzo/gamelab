@@ -1,23 +1,22 @@
 import type { ActResult, BombModule, ManualEntry, ModuleAction, ModuleState, Rng } from '../types';
 
-export type ButtonColor = 'red' | 'blue' | 'yellow' | 'white';
-export type ButtonLabel = 'HOLD' | 'PRESS' | 'ABORT';
+export type ButtonColor = 'orange' | 'teal' | 'purple' | 'pink';
+export type ButtonLabel = 'GO' | 'STOP' | 'WAIT';
 
-const COLORS: readonly ButtonColor[] = ['red', 'blue', 'yellow', 'white'];
-const LABELS: readonly ButtonLabel[] = ['HOLD', 'PRESS', 'ABORT'];
+const COLORS: readonly ButtonColor[] = ['orange', 'teal', 'purple', 'pink'];
+const LABELS: readonly ButtonLabel[] = ['GO', 'STOP', 'WAIT'];
 
 /**
- * Pure rule table, same order as the manual. First matching rule wins, otherwise tap.
+ * Pure rule table, same order as the manual. First matching rule wins; the last rule always applies.
  * Defined for every color/label pair, so `act`, `solve` and the manual always agree.
  * true = hold and release when the timer's seconds digit equals the button's digit;
  * false = tap (press and release immediately, any timer digit).
  */
 export function needsHold(color: ButtonColor, label: ButtonLabel): boolean {
-  if (color === 'white' && label === 'ABORT') return false; // manual rule 1
-  if (color === 'blue') return true; // manual rule 2
-  if (label === 'ABORT') return true; // manual rule 3
-  if (color === 'yellow' && label === 'PRESS') return true; // manual rule 4
-  return false; // manual rule 5
+  if (label === 'GO' && (color === 'purple' || color === 'pink')) return true; // manual rule 1
+  if (label === 'GO' || color === 'pink') return false; // manual rule 2
+  if (color === 'orange' || color === 'teal') return true; // manual rule 3
+  return false; // manual rule 4
 }
 
 interface ButtonData {
@@ -87,7 +86,7 @@ export const buttonModule: BombModule = {
     return {
       kind: 'button',
       titleKey: 'manual.button.title',
-      rules: [1, 2, 3, 4, 5, 6].map((n) => `manual.button.rule.${n}`),
+      rules: [1, 2, 3, 4, 5].map((n) => `manual.button.rule.${n}`),
     };
   },
 

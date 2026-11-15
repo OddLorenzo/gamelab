@@ -9,7 +9,8 @@ import type { DeafView } from '../../src/core/views';
 import { glyphChar } from '../../src/ui/glyphs';
 import { computeLayout, HUD_H, specsFromBlind, specsFromDeaf } from '../../src/ui/layout';
 import type { ModuleLayout, Rect } from '../../src/ui/layout';
-import { drawBlind, drawDeaf, drawPointers, WIRE_COLORS } from '../../src/ui/renderer';
+import { BUTTON_COLORS, BUTTON_NOTCHES, drawBlind, drawDeaf, drawPointers, WIRE_COLORS } from '../../src/ui/renderer';
+import { en, fr } from '../../src/ui/i18n';
 import { formatClock } from '../../src/ui/timing';
 import type { BlindView } from '../../src/core/views';
 import { colorAssignments, deepFreeze, isGrey, recordingCtx, shapes, textCalls } from './recording-ctx';
@@ -93,6 +94,27 @@ describe('WIRE_COLORS', () => {
   });
 });
 
+describe('BUTTON_COLORS', () => {
+  const names = ['orange', 'teal', 'purple', 'pink'];
+
+  it('has a distinct hex color per button color, none of them a wire color', () => {
+    expect(Object.keys(BUTTON_COLORS).sort()).toEqual([...names].sort());
+    for (const n of names) expect(BUTTON_COLORS[n]).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(new Set(Object.values(BUTTON_COLORS)).size).toBe(4);
+    for (const c of Object.values(BUTTON_COLORS)) expect(Object.values(WIRE_COLORS)).not.toContain(c);
+  });
+
+  it('gives each color its own notch count, 1 to 4, and a spoken name in fr and en', () => {
+    expect(names.map((n) => BUTTON_NOTCHES[n])).toEqual([1, 2, 3, 4]);
+    for (const n of names) {
+      expect(en[`color.${n}`], n).toBeTruthy();
+      expect(fr[`color.${n}`], n).toBeTruthy();
+    }
+    expect(new Set(names.map((n) => en[`color.${n}`])).size).toBe(4);
+    expect(new Set(names.map((n) => fr[`color.${n}`])).size).toBe(4);
+  });
+});
+
 describe('drawBlind', () => {
   const view = projectView(sessionOf(9), 'blind') as BlindView;
 
@@ -106,7 +128,7 @@ describe('drawBlind', () => {
   it('never draws text and never names a color', () => {
     const calls = renderBlind(view);
     expect(calls.filter((c) => c[0] === 'fillText' || c[0] === 'strokeText')).toEqual([]);
-    const names = /\b(red|blue|yellow|green|white|orange|purple|pink|cyan|magenta)\b/i;
+    const names = /\b(red|blue|yellow|green|white|orange|teal|purple|pink|cyan|magenta)\b/i;
     for (const c of calls) expect(names.test(JSON.stringify(c)), JSON.stringify(c)).toBe(false);
     for (const c of calls.filter((x) => x[0] === 'set')) {
       expect(['fillStyle', 'strokeStyle', 'lineWidth', 'lineCap', 'lineJoin', 'globalAlpha']).toContain(c[1]);
@@ -221,8 +243,8 @@ describe('drawDeaf: wires', () => {
 });
 
 describe('drawDeaf: button', () => {
-  it.each(['HOLD', 'PRESS', 'ABORT'])('draws the raw label %s and the digit inside the button frame', (label) => {
-    const view = deafView([buttonState('b', 'blue', label, false, 6)]);
+  it.each(['GO', 'STOP', 'WAIT'])('draws the raw label %s and the digit inside the button frame', (label) => {
+    const view = deafView([buttonState('b', 'teal', label, false, 6)]);
     const frame = px(layoutOfDeaf(view)[0].frame);
     const texts = textCalls(renderDeaf(view)).filter((t) => within(t.x, t.y, frame));
     expect(texts.filter((t) => t.text === label)).toHaveLength(1);
@@ -230,20 +252,32 @@ describe('drawDeaf: button', () => {
   });
 
   it('draws a circle in the button color on the single slot', () => {
-    for (const color of ['red', 'blue', 'yellow', 'white']) {
-      const view = deafView([buttonState('b', color, 'HOLD')]);
+    for (const color of ['orange', 'teal', 'purple', 'pink']) {
+      const view = deafView([buttonState('b', color, 'GO')]);
       const slot = px(layoutOfDeaf(view)[0].slots[0]);
       const disc = shapes(renderDeaf(view)).filter(
-        (s) => s.op === 'fill' && s.style === WIRE_COLORS[color] && s.radii.length > 0 && within(s.points[0][0], s.points[0][1], slot),
+        (s) => s.op === 'fill' && s.style === BUTTON_COLORS[color] && s.radii.length > 0 && within(s.points[0][0], s.points[0][1], slot),
       );
       expect(disc.length, color).toBe(1);
       expect(disc[0].radii[0]).toBeGreaterThan(slot.w * 0.3);
     }
   });
 
+  it('draws 1, 2, 3 or 4 notches on the rim for orange, teal, purple, pink (not only a hue)', () => {
+    const notchesOf = (color: string): number => {
+      const view = deafView([buttonState('b', color, 'WAIT')]);
+      const slot = px(layoutOfDeaf(view)[0].slots[0]);
+      return shapes(renderDeaf(view)).filter(
+        (s) => s.op === 'stroke' && s.style === '#12161b' && s.radii.length === 0 && s.points.length === 2 && s.points.every(([x, y]) => within(x, y, slot)),
+      ).length;
+    };
+    expect(['orange', 'teal', 'purple', 'pink'].map(notchesOf)).toEqual([1, 2, 3, 4]);
+    expect(notchesOf('nope')).toBe(0);
+  });
+
   it('shows a held ring only while held', () => {
-    const idle = renderDeaf(deafView([buttonState('b', 'red', 'PRESS', false)]));
-    const held = renderDeaf(deafView([buttonState('b', 'red', 'PRESS', true)]));
+    const idle = renderDeaf(deafView([buttonState('b', 'pink', 'STOP', false)]));
+    const held = renderDeaf(deafView([buttonState('b', 'pink', 'STOP', true)]));
     expect(held).not.toEqual(idle);
     const ringCount = (calls: Call[]): number => shapes(calls).filter((s) => s.op === 'stroke' && s.radii.length > 0).length;
     expect(ringCount(held)).toBeGreaterThan(ringCount(idle));
@@ -309,7 +343,7 @@ describe('drawDeaf: code', () => {
 });
 
 describe('drawDeaf: HUD', () => {
-  const view = deafView([buttonState('b', 'red', 'HOLD')]);
+  const view = deafView([buttonState('b', 'orange', 'GO')]);
 
   it('draws the clock as formatClock(msLeft), once', () => {
     for (const ms of [125_000, 59_999, 600_000, 0]) {
@@ -326,7 +360,7 @@ describe('drawDeaf: HUD', () => {
 
   it('draws the strikes left as pips plus the number', () => {
     for (const strikesLeft of [0, 1, 2, 3]) {
-      const v = deafView([buttonState('b', 'red', 'HOLD')], { strikesLeft });
+      const v = deafView([buttonState('b', 'orange', 'GO')], { strikesLeft });
       const calls = renderDeaf(v);
       const pips = shapes(calls).filter((s) => s.radii.length > 0 && s.points.every(([, y]) => y < HUD_H * H));
       expect(pips, `strikes ${strikesLeft}`).toHaveLength(strikesLeft);
@@ -338,8 +372,8 @@ describe('drawDeaf: HUD', () => {
 
 describe('drawDeaf: solved modules, pressed slot', () => {
   it('draws a solved module dimmed (globalAlpha) and an unsolved one not', () => {
-    const open = renderDeaf(deafView([buttonState('b', 'red', 'HOLD', false, 3, false)]));
-    const done = renderDeaf(deafView([buttonState('b', 'red', 'HOLD', false, 3, true)]));
+    const open = renderDeaf(deafView([buttonState('b', 'orange', 'GO', false, 3, false)]));
+    const done = renderDeaf(deafView([buttonState('b', 'orange', 'GO', false, 3, true)]));
     expect(open.some((c) => c[0] === 'set' && c[1] === 'globalAlpha')).toBe(false);
     expect(done.some((c) => c[0] === 'set' && c[1] === 'globalAlpha' && (c[2] as number) < 1)).toBe(true);
   });

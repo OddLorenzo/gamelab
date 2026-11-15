@@ -59,6 +59,10 @@ export const en: Record<string, string> = {
   'color.yellow': 'yellow',
   'color.green': 'green',
   'color.white': 'white',
+  'color.orange': 'orange',
+  'color.teal': 'teal',
+  'color.purple': 'purple',
+  'color.pink': 'pink',
 
   'emote.open': 'Emotes',
   'emote.point': 'Look here',
@@ -106,12 +110,11 @@ export const en: Record<string, string> = {
 
   'manual.button.title': 'The button',
   'manual.button.rule.1':
-    'Look at the color of the button and the word written on it (HOLD, PRESS or ABORT). Check the lines 1 to 5 in order and stop at the first one that applies:\n1. The {white} button labelled ABORT: tap.',
-  'manual.button.rule.2': '2. The {blue} button, whatever the label: hold.',
-  'manual.button.rule.3': '3. Any other button labelled ABORT: hold.',
-  'manual.button.rule.4': '4. The {yellow} button labelled PRESS: hold.',
-  'manual.button.rule.5': '5. Anything else: tap.',
-  'manual.button.rule.6':
+    'Look at the color of the button and the word written on it (GO, STOP or WAIT). Check the lines 1 to 4 in order and stop at the first one that applies:\n1. A {purple} or {pink} button labelled GO: hold.',
+  'manual.button.rule.2': '2. Otherwise, any other button labelled GO, and any {pink} button: tap.',
+  'manual.button.rule.3': '3. Otherwise, an {orange} or {teal} button: hold.',
+  'manual.button.rule.4': '4. Anything else: tap.',
+  'manual.button.rule.5':
     'A tap: touch the button and let go at once. A hold: keep the finger on the button, then let go at the moment when the last digit of the seconds on the timer is the digit on the button (timer at 2:47 and digit 7: let go while the seconds of the timer end in 7). Letting go at another digit is a strike. Holding a button that needs a tap for too long is also a strike.',
 
   'manual.symbols.title': 'Symbols',
@@ -202,6 +205,10 @@ export const fr: Record<string, string> = {
   'color.yellow': 'jaune',
   'color.green': 'vert',
   'color.white': 'blanc',
+  'color.orange': 'orange',
+  'color.teal': 'turquoise',
+  'color.purple': 'violet',
+  'color.pink': 'rose',
 
   'emote.open': 'Emotes',
   'emote.point': 'Regarde ici',
@@ -249,12 +256,11 @@ export const fr: Record<string, string> = {
 
   'manual.button.title': 'Le bouton',
   'manual.button.rule.1':
-    "Regarde la couleur du bouton et le mot écrit dessus (HOLD, PRESS ou ABORT). Vérifie les lignes 1 à 5 dans l'ordre et arrête-toi à la première qui s'applique :\n1. Bouton {white} avec le mot ABORT : appui bref.",
-  'manual.button.rule.2': '2. Bouton {blue}, quel que soit le mot : appui long.',
-  'manual.button.rule.3': '3. Tout autre bouton avec le mot ABORT : appui long.',
-  'manual.button.rule.4': '4. Bouton {yellow} avec le mot PRESS : appui long.',
-  'manual.button.rule.5': '5. Tout le reste : appui bref.',
-  'manual.button.rule.6':
+    "Regarde la couleur du bouton et le mot écrit dessus (GO, STOP ou WAIT). Vérifie les lignes 1 à 4 dans l'ordre et arrête-toi à la première qui s'applique :\n1. Bouton {purple} ou {pink} avec le mot GO : appui long.",
+  'manual.button.rule.2': '2. Sinon, tout autre bouton avec le mot GO, et tout bouton {pink} : appui bref.',
+  'manual.button.rule.3': '3. Sinon, bouton {orange} ou {teal} : appui long.',
+  'manual.button.rule.4': '4. Tout le reste : appui bref.',
+  'manual.button.rule.5':
     'Appui bref : touche le bouton et relâche tout de suite. Appui long : garde le doigt sur le bouton, puis relâche au moment où le dernier chiffre des secondes du minuteur est le chiffre du bouton (minuteur à 2:47 et chiffre 7 : relâche tant que les secondes du minuteur se terminent par 7). Relâcher sur un autre chiffre compte comme une erreur. Garder le doigt trop longtemps sur un bouton à appui bref compte aussi comme une erreur.',
 
   'manual.symbols.title': 'Symboles',

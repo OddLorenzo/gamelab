@@ -17,7 +17,7 @@ import type { MemoryNetwork } from './memory-transport';
 const IDS = ['aaaaaaaa', 'bbbbbbbb', 'cccccccc'];
 const HOST = IDS[0];
 const ALL_KINDS: ModuleKind[] = ['wires', 'button', 'symbols', 'code'];
-const COLOR_NAMES = ['red', 'blue', 'yellow', 'green', 'white'];
+const COLOR_NAMES = ['red', 'blue', 'yellow', 'green', 'white', 'orange', 'teal', 'purple', 'pink'];
 const GLYPH_NAMES = [...new Set(SYMBOL_COLUMNS.flat())];
 const T0 = 1_000_000;
 
@@ -877,7 +877,12 @@ describe('I1: the host salts the session seed', () => {
   it('is still fully playable: the real solve actions of the salted bomb win', () => {
     const rig = makeRig({ level: buildLevel(7), rngSeed: HOST_IS_MUTE });
     const blind = rig.guests[rig.peerOf('blind')];
-    for (const s of solveAll(rig)) blind.sendAct(s.moduleId, s.action);
+    for (const s of solveAll(rig)) {
+      // a hold-type button is released when the host timer shows its digit (the host owns the digit)
+      const digit = s.action.type === 'release' ? s.action.payload?.['timerDigit'] : undefined;
+      while (typeof digit === 'number' && Math.floor(rig.snap().msLeft / 1000) % 10 !== digit) vi.advanceTimersByTime(100);
+      blind.sendAct(s.moduleId, s.action);
+    }
     expect(rig.snap().status).toBe('won');
     for (const id of IDS) expect(rig.rec[id].ended.map((e) => e.reason)).toEqual(['won']);
   });

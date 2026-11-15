@@ -7,7 +7,7 @@ import { SYMBOL_COLUMNS } from '../../src/core/modules/symbols';
 import type { ModuleKind } from '../../src/core/types';
 
 const ALL_KINDS: ModuleKind[] = ['wires', 'button', 'symbols', 'code'];
-const COLOR_NAMES = ['red', 'blue', 'yellow', 'green', 'white'];
+const COLOR_NAMES = ['red', 'blue', 'yellow', 'green', 'white', 'orange', 'teal', 'purple', 'pink'];
 const GLYPH_NAMES = [...new Set(SYMBOL_COLUMNS.flat())];
 const SEEDS = Array.from({ length: 60 }, (_, i) => i * 7919 + 3);
 
@@ -82,7 +82,7 @@ describe('blind view', () => {
       expect(serial.length).toBe(6);
       expect(json).not.toContain(serial);
       expect(json).not.toContain(s.modules[3].data['target'] as string);
-      for (const label of ['HOLD', 'PRESS', 'ABORT']) expect(json).not.toContain(label);
+      for (const label of ['GO', 'STOP', 'WAIT']) expect(json).not.toContain(label);
       for (const key of [
         'serial', 'timerDigit', 'digit', 'target', 'order', 'data', 'wires', 'symbols', 'msLeft', 'rules', 'manual',
       ]) {

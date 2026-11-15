@@ -8,8 +8,8 @@ import {
 } from '../../../src/core/modules/button';
 import type { ActResult, ModuleAction, ModuleState } from '../../../src/core/types';
 
-const COLORS: ButtonColor[] = ['red', 'blue', 'yellow', 'white'];
-const LABELS: ButtonLabel[] = ['HOLD', 'PRESS', 'ABORT'];
+const COLORS: ButtonColor[] = ['orange', 'teal', 'purple', 'pink'];
+const LABELS: ButtonLabel[] = ['GO', 'STOP', 'WAIT'];
 
 const stateOf = (color: ButtonColor, label: ButtonLabel, digit = 5, held = false): ModuleState => ({
   kind: 'button',
@@ -28,18 +28,18 @@ const act = (type: string, timerDigit?: number): ModuleAction => ({
 
 // Reference table, written out by hand: true = hold, false = tap.
 const EXPECTED: Record<string, boolean> = {
-  'red/HOLD': false,
-  'red/PRESS': false,
-  'red/ABORT': true,
-  'blue/HOLD': true,
-  'blue/PRESS': true,
-  'blue/ABORT': true,
-  'yellow/HOLD': false,
-  'yellow/PRESS': true,
-  'yellow/ABORT': true,
-  'white/HOLD': false,
-  'white/PRESS': false,
-  'white/ABORT': false,
+  'orange/GO': false,
+  'orange/STOP': true,
+  'orange/WAIT': true,
+  'teal/GO': false,
+  'teal/STOP': true,
+  'teal/WAIT': true,
+  'purple/GO': true,
+  'purple/STOP': false,
+  'purple/WAIT': false,
+  'pink/GO': true,
+  'pink/STOP': false,
+  'pink/WAIT': false,
 };
 
 describe('button module: init', () => {
@@ -85,31 +85,36 @@ describe('needsHold rule table (first match wins)', () => {
     }
   });
 
-  it('rule 1 (white ABORT is a tap) beats rule 3 (ABORT holds)', () => {
-    expect(needsHold('white', 'ABORT')).toBe(false);
-    expect(needsHold('red', 'ABORT')).toBe(true);
+  it('rule 1 (purple or pink GO holds) beats rule 2 (GO taps, pink taps)', () => {
+    expect(needsHold('purple', 'GO')).toBe(true);
+    expect(needsHold('pink', 'GO')).toBe(true);
+    expect(needsHold('orange', 'GO')).toBe(false);
   });
 
-  it('rule 2: blue always holds, whatever the label', () => {
-    expect(needsHold('blue', 'HOLD')).toBe(true);
-    expect(needsHold('blue', 'PRESS')).toBe(true);
+  it('rule 2 (GO or pink taps) beats rule 3 (orange or teal holds)', () => {
+    expect(needsHold('orange', 'GO')).toBe(false);
+    expect(needsHold('teal', 'GO')).toBe(false);
+    expect(needsHold('pink', 'STOP')).toBe(false);
+    expect(needsHold('pink', 'WAIT')).toBe(false);
   });
 
-  it('rule 4: yellow PRESS holds, yellow HOLD taps', () => {
-    expect(needsHold('yellow', 'PRESS')).toBe(true);
-    expect(needsHold('yellow', 'HOLD')).toBe(false);
+  it('rule 3: orange and teal STOP / WAIT hold, ahead of the tap fallback', () => {
+    expect(needsHold('orange', 'STOP')).toBe(true);
+    expect(needsHold('teal', 'WAIT')).toBe(true);
   });
 
-  it('fallback: red HOLD, red PRESS, white HOLD and white PRESS are taps', () => {
-    expect(needsHold('red', 'HOLD')).toBe(false);
-    expect(needsHold('red', 'PRESS')).toBe(false);
-    expect(needsHold('white', 'HOLD')).toBe(false);
-    expect(needsHold('white', 'PRESS')).toBe(false);
+  it('fallback: purple STOP and purple WAIT are taps', () => {
+    expect(needsHold('purple', 'STOP')).toBe(false);
+    expect(needsHold('purple', 'WAIT')).toBe(false);
+  });
+
+  it('both gestures occur, 6 of the 12 pairs hold', () => {
+    expect(Object.values(EXPECTED).filter(Boolean)).toHaveLength(6);
   });
 });
 
-describe('button module: tap-type (red HOLD)', () => {
-  const tapState = stateOf('red', 'HOLD', 3);
+describe('button module: tap-type (orange GO)', () => {
+  const tapState = stateOf('orange', 'GO', 3);
 
   it('press solves', () => {
     const r = buttonModule.act(tapState, act('press', 8));
@@ -135,8 +140,8 @@ describe('button module: tap-type (red HOLD)', () => {
   });
 });
 
-describe('button module: hold-type (blue PRESS, digit 4)', () => {
-  const holdState = stateOf('blue', 'PRESS', 4);
+describe('button module: hold-type (teal STOP, digit 4)', () => {
+  const holdState = stateOf('teal', 'STOP', 4);
 
   it('a quick press strikes', () => {
     const r = buttonModule.act(holdState, act('press', 4));
@@ -171,7 +176,7 @@ describe('button module: hold-type (blue PRESS, digit 4)', () => {
   });
 
   it('digit 0 is a valid target', () => {
-    const zero = stateOf('blue', 'HOLD', 0);
+    const zero = stateOf('pink', 'GO', 0);
     const h = buttonModule.act(zero, act('hold', 5));
     expect(buttonModule.act(h.state, act('release', 0)).outcome).toBe('solved');
   });
@@ -193,7 +198,7 @@ describe('button module: hold-type (blue PRESS, digit 4)', () => {
 
 describe('button module: robustness', () => {
   it('release with a missing, non-integer, NaN or out-of-range digit is ignored while held', () => {
-    const held = stateOf('blue', 'PRESS', 4, true);
+    const held = stateOf('teal', 'STOP', 4, true);
     const bad: (ModuleAction['payload'])[] = [
       undefined,
       {},
@@ -212,7 +217,7 @@ describe('button module: robustness', () => {
   });
 
   it('unknown action type or wrong module kind is ignored', () => {
-    const s = stateOf('red', 'HOLD');
+    const s = stateOf('orange', 'GO');
     const r1 = buttonModule.act(s, act('smash', 1));
     expect(r1.outcome).toBe('progress');
     expect(r1.state).toBe(s);
@@ -222,7 +227,7 @@ describe('button module: robustness', () => {
   });
 
   it('a solved module ignores further actions', () => {
-    const solved: ActResult = buttonModule.act(stateOf('red', 'HOLD'), act('press', 0));
+    const solved: ActResult = buttonModule.act(stateOf('orange', 'GO'), act('press', 0));
     expect(solved.state.solved).toBe(true);
     for (const a of [act('press', 0), act('hold', 0), act('release', 0)]) {
       const r = buttonModule.act(solved.state, a);
@@ -232,7 +237,7 @@ describe('button module: robustness', () => {
   });
 
   it('act does not mutate the input state', () => {
-    const s = stateOf('blue', 'PRESS', 4);
+    const s = stateOf('teal', 'STOP', 4);
     const before = JSON.stringify(s);
     buttonModule.act(s, act('hold', 0));
     buttonModule.act(s, act('press', 0));
@@ -260,8 +265,8 @@ describe('button module: solve', () => {
   });
 
   it('tap-type solves with a single press, hold-type with hold then release', () => {
-    expect(buttonModule.solve(stateOf('white', 'ABORT')).map((a) => a.type)).toEqual(['press']);
-    const hold = buttonModule.solve(stateOf('blue', 'ABORT', 6));
+    expect(buttonModule.solve(stateOf('purple', 'WAIT')).map((a) => a.type)).toEqual(['press']);
+    const hold = buttonModule.solve(stateOf('orange', 'WAIT', 6));
     expect(hold.map((a) => a.type)).toEqual(['hold', 'release']);
     expect(hold[1].payload).toEqual({ timerDigit: 6 });
   });
@@ -280,10 +285,10 @@ describe('button module: solve', () => {
 });
 
 describe('button module: manual', () => {
-  it('uses i18n keys only and lists six rules in order', () => {
+  it('uses i18n keys only and lists five rules in order', () => {
     const m = buttonModule.manual();
     expect(m.kind).toBe('button');
     expect(m.titleKey).toBe('manual.button.title');
-    expect(m.rules).toEqual([1, 2, 3, 4, 5, 6].map((n) => `manual.button.rule.${n}`));
+    expect(m.rules).toEqual([1, 2, 3, 4, 5].map((n) => `manual.button.rule.${n}`));
   });
 });
