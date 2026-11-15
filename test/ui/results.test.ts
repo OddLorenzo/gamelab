@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EndReason, EndStats } from '../../src/net/protocol';
-import { en, setLang, t } from '../../src/ui/i18n';
+import { en, fr, setLang, t } from '../../src/ui/i18n';
+import { V0_MAX_LEVEL } from '../../src/ui/progress';
 import { createResults, starsFor } from '../../src/ui/scenes/results';
 import type { ResultsDeps } from '../../src/ui/scenes/results';
 
@@ -83,11 +84,23 @@ describe('createResults', () => {
     expect(root.textContent).not.toContain(t('results.waitHost'));
   });
 
-  it('guest sees no buttons and the wait text', () => {
-    createResults(root, make({ isHost: false }));
-    expect(root.querySelectorAll('button')).toHaveLength(0);
+  it('guest sees a Lobby button (and only that) plus the wait text', () => {
+    const deps = make({ isHost: false });
+    createResults(root, deps);
+    expect(root.querySelectorAll('button')).toHaveLength(1);
+    expect(q(root, 'lobby')?.textContent).toBe(t('results.lobby'));
+    expect(q(root, 'next')).toBeNull();
+    expect(q(root, 'retry')).toBeNull();
     expect(q(root, 'wait-host')?.textContent).toBe(t('results.waitHost'));
     expect(q(root, 'stars-text')?.textContent).toBe(t('results.stars', { count: 3 }));
+    (q(root, 'lobby') as HTMLButtonElement).click();
+    expect(deps.onLobby).toHaveBeenCalledTimes(1);
+  });
+
+  it('guest after a loss also gets the Lobby button', () => {
+    createResults(root, make({ isHost: false, reason: 'lost', stats: stats(0, 0) }));
+    expect(q(root, 'lobby')).not.toBeNull();
+    expect(root.querySelectorAll('button')).toHaveLength(1);
   });
 
   it('a 1-strike level can show 3 stars when no strike was used', () => {
@@ -108,25 +121,31 @@ describe('createResults', () => {
     expect(q(root, 'stars')?.querySelectorAll('[data-filled="true"]')).toHaveLength(2);
   });
 
-  it('a win saves the stars once, for the host, before the buttons exist', () => {
-    const saveStars = vi.fn(() => {
-      expect(root.querySelectorAll('button')).toHaveLength(0);
-    });
-    createResults(root, make({ saveStars }));
-    expect(saveStars).toHaveBeenCalledTimes(1);
-    expect(saveStars).toHaveBeenCalledWith(3, 3);
+  it('a win saves the stars once, before the buttons exist, on the host and on a guest', () => {
+    for (const isHost of [true, false]) {
+      root.replaceChildren();
+      const saveStars = vi.fn(() => {
+        expect(root.querySelectorAll('button')).toHaveLength(0);
+      });
+      createResults(root, make({ isHost, saveStars }));
+      expect(saveStars, String(isHost)).toHaveBeenCalledTimes(1);
+      expect(saveStars, String(isHost)).toHaveBeenCalledWith(3, 3);
+    }
   });
 
-  it('does not save for a guest, for a loss, or for an error reason', () => {
-    for (const [isHost, reason] of [
-      [false, 'won'],
-      [true, 'lost'],
-      [true, 'host-left'],
-      [true, 'player-left'],
-    ] as [boolean, EndReason][]) {
-      const saveStars = vi.fn();
-      createResults(root, make({ isHost, reason, saveStars }));
-      expect(saveStars, `${String(isHost)} ${reason}`).not.toHaveBeenCalled();
+  it('a guest without stats saves 2 stars on a win', () => {
+    const saveStars = vi.fn();
+    createResults(root, make({ isHost: false, stats: undefined, saveStars }));
+    expect(saveStars).toHaveBeenCalledWith(3, 2);
+  });
+
+  it('does not save for a loss or an error reason, host or guest', () => {
+    for (const isHost of [true, false]) {
+      for (const reason of ['lost', 'host-left', 'player-left'] as EndReason[]) {
+        const saveStars = vi.fn();
+        createResults(root, make({ isHost, reason, saveStars }));
+        expect(saveStars, `${String(isHost)} ${reason}`).not.toHaveBeenCalled();
+      }
     }
   });
 
@@ -138,11 +157,35 @@ describe('createResults', () => {
     expect((q(root, 'retry') as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it('Next is enabled when the next level is unlocked (after the save) and disabled at the top level', () => {
+  it('Next is enabled when the next level is unlocked (after the save)', () => {
     createResults(root, make({ levelId: 3, unlocked: () => [1, 2, 3, 4] }));
     expect((q(root, 'next') as HTMLButtonElement).disabled).toBe(false);
-    createResults(root, make({ levelId: 100, unlocked: () => [99, 100] }));
-    expect((q(root, 'next') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('after the v0 last level there is no Next button; a win shows the all-done note, a loss does not', () => {
+    expect(V0_MAX_LEVEL).toBe(10);
+    createResults(root, make({ levelId: V0_MAX_LEVEL, unlocked: () => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] }));
+    expect(q(root, 'next')).toBeNull();
+    expect(q(root, 'retry')).not.toBeNull();
+    expect(q(root, 'all-done')?.textContent).toBe(t('results.allDone'));
+    createResults(root, make({ levelId: V0_MAX_LEVEL, reason: 'lost', stats: stats(0, 0) }));
+    expect(q(root, 'next')).toBeNull();
+    expect(q(root, 'all-done')).toBeNull();
+    // level 9 still has its Next, and no note
+    createResults(root, make({ levelId: V0_MAX_LEVEL - 1, unlocked: () => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] }));
+    expect(q(root, 'next')).not.toBeNull();
+    expect(q(root, 'all-done')).toBeNull();
+  });
+
+  it('a guest after the last level sees the all-done note and the Lobby button', () => {
+    createResults(root, make({ isHost: false, levelId: V0_MAX_LEVEL }));
+    expect(q(root, 'all-done')).not.toBeNull();
+    expect(q(root, 'lobby')).not.toBeNull();
+  });
+
+  it('results.allDone exists in both languages', () => {
+    expect(en['results.allDone']).toBeTruthy();
+    expect(fr['results.allDone']).toBeTruthy();
   });
 
   it('the buttons call their handlers and are at least 44px by CSS contract', () => {

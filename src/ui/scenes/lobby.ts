@@ -8,6 +8,7 @@ import type { RoomConnection } from '../../net/transport';
 import { el } from '../dom';
 import { getLang, setLang, t } from '../i18n';
 import type { Lang } from '../i18n';
+import { V0_MAX_LEVEL } from '../progress';
 
 /** Same alphabet as the Worker's room codes. */
 export const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ';
@@ -150,6 +151,8 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
     },
   };
   const base = (): RoundBase => ({ code, micTrack });
+  /** Levels the picker offers: unlocked ones, and version 0 stops at its last level. */
+  const openLevels = (): number[] => deps.unlocked().filter((id) => id <= V0_MAX_LEVEL);
 
   /* ------------------------------------------------------------ render */
 
@@ -272,7 +275,7 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
   };
 
   const levelPicker = (): HTMLElement => {
-    const ids = deps.unlocked();
+    const ids = openLevels();
     if (!ids.includes(chosen)) chosen = ids.length > 0 ? Math.max(...ids) : 1;
     const wrap = el('div', { cls: 'levels' }, [el('p', { cls: 'label', text: t('lobby.level') })]);
     const chips = el('div', { cls: 'chips', attrs: { role: 'group', 'aria-label': t('lobby.level') } });
@@ -347,7 +350,7 @@ export function createLobby(root: HTMLElement, deps: LobbyDeps): LobbyHandle {
       view = 'room';
       shownPeers = -1;
       busy = false;
-      const open = deps.unlocked();
+      const open = openLevels();
       chosen = open.length > 0 ? Math.max(...open) : 1;
       poll = setInterval(() => sync(), POLL_MS);
       sync('view');

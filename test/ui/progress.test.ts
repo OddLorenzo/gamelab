@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { V0_MAX_LEVEL } from '../../src/ui/progress';
+
 const fresh = async () => {
   vi.resetModules();
   return import('../../src/ui/progress');
@@ -26,7 +28,11 @@ describe('progress', () => {
     expect(unlockedLevels({ stars: { 1: 0 } })).toEqual([1]);
     // 2 has no star: 3 stays locked even though 3 itself has stars; 4 opens through 3
     expect(unlockedLevels({ stars: { 1: 2, 2: 0, 3: 3 } })).toEqual([1, 2, 4]);
-    expect(unlockedLevels({ stars: { 99: 1 } })).toEqual([1, 100]);
+    expect(unlockedLevels({ stars: { 9: 1 } })).toEqual([1, 10]);
+    // v0 ships 10 levels: a star on level 10 opens nothing, and nothing past 10 is ever listed
+    expect(unlockedLevels({ stars: { 10: 3 } })).toEqual([1]);
+    const all = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [i + 1, 3]));
+    expect(unlockedLevels({ stars: all })).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   });
 
   it('saveStars returns and persists the progress', async () => {
@@ -50,8 +56,10 @@ describe('progress', () => {
 
   it('ignores invalid level ids', async () => {
     const { saveStars, loadProgress } = await fresh();
-    for (const bad of [0, -1, 101, 1.5, Number.NaN, Infinity]) saveStars(bad, 3);
+    for (const bad of [0, -1, 11, 101, 1.5, Number.NaN, Infinity]) saveStars(bad, 3);
     expect(loadProgress()).toEqual({ stars: {} });
+    expect(V0_MAX_LEVEL).toBe(10);
+    expect(saveStars(10, 3).stars[10]).toBe(3);
   });
 
   it('ignores invalid star values', async () => {
@@ -74,7 +82,7 @@ describe('progress', () => {
     const { loadProgress } = await fresh();
     localStorage.setItem(
       'mb.progress',
-      JSON.stringify({ stars: { 1: 9, abc: 2, 0: 3, 2: 2, 101: 1, 3: 1.5, 4: 'x', 5: 3 } }),
+      JSON.stringify({ stars: { 1: 9, abc: 2, 0: 3, 2: 2, 11: 3, 101: 1, 3: 1.5, 4: 'x', 5: 3 } }),
     );
     expect(loadProgress()).toEqual({ stars: { 2: 2, 5: 3 } });
   });

@@ -610,6 +610,14 @@ describe('host', () => {
     expect(r.root.querySelector('select')).toBeNull();
   });
 
+  it('version 0 lists no level above 10, even when the progress unlocks one', async () => {
+    const r = mount({ unlocked: [1, 2, 9, 10, 11, 12, 100] });
+    await click(q(r.root, 'create'));
+    const chips = [...r.root.querySelectorAll<HTMLButtonElement>('[data-level]')];
+    expect(chips.map((c) => c.dataset.level)).toEqual(['1', '2', '9', '10']);
+    expect(chips.filter((c) => c.getAttribute('aria-pressed') === 'true').map((c) => c.dataset.level)).toEqual(['10']);
+  });
+
   it('Start builds a HostGame with buildLevel(chosen), calls start() and hands off', async () => {
     const r = mount({ unlocked: [1, 2, 3] });
     await click(q(r.root, 'create'));

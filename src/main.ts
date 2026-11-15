@@ -9,6 +9,7 @@ import type { GameStartInfo, LobbyDeps, RoundDeps } from './ui/scenes/lobby';
 import { createResults } from './ui/scenes/results';
 import { createVoiceSession } from './ui/voice-session';
 import type { VoiceSession } from './ui/voice-session';
+import type { GuestGame } from './net/guest';
 import type { EndReason, EndStats } from './net/protocol';
 import type { RoomConnection } from './net/transport';
 
@@ -63,7 +64,15 @@ const lobbyDeps: LobbyDeps = {
   version: APP_VERSION,
 };
 
+/**
+ * The guest's GuestGame that waits for the host's next round while the results screen shows. It is
+ * either handed to the game scene (round starts) or stopped here (the guest leaves).
+ */
+let waitingGuest: GuestGame | null = null;
+
 function leaveRoom(info: GameStartInfo): void {
+  waitingGuest?.stop();
+  waitingGuest = null;
   info.game.stop();
   info.conn.close();
   voices.get(info.conn)?.destroy();
@@ -81,10 +90,13 @@ function playAgain(info: GameStartInfo, levelId: number): void {
 
 function showResults(root: HTMLElement, info: GameStartInfo, reason: EndReason, stats?: EndStats): Scene {
   const finished = reason === 'won' || reason === 'lost';
+  waitingGuest?.stop();
+  waitingGuest = null;
   if (finished && info.role === 'guest') {
     // wait for the host's next round; a host that leaves first ends the wait
     const waiting = watchGuestRound(info.conn, roundDeps, info, (r) => showScene({ name: 'results', info, reason: r }));
     if (waiting === null) return showResults(root, info, 'player-left');
+    waitingGuest = waiting;
   }
   return createResults(root, {
     isHost: info.role === 'host',
@@ -109,6 +121,7 @@ function showScene(req: SceneRequest): void {
       current = createLobby(ui, lobbyDeps);
       break;
     case 'game':
+      waitingGuest = null; // a waiting guest game is the game of this round now: the scene owns it
       current = createGameScene(ui, req.info, {
         voice: voiceOf(req.info.conn, req.info.micTrack),
         now,

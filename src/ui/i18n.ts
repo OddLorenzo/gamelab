@@ -30,6 +30,7 @@ export const en: Record<string, string> = {
   'err.network': 'Connection problem. Check your network and try again.',
   'err.playerLeft': 'A player left the game.',
   'err.hostLeft': 'The host left the game.',
+  'err.linkFailed': 'A connection to another player could not be established (strict network?). Leave and create a new room, or try another network.',
 
   'results.won': 'Bomb defused!',
   'results.lost': 'Boom! The bomb went off.',
@@ -38,6 +39,7 @@ export const en: Record<string, string> = {
   'results.retry': 'Try again',
   'results.lobby': 'Back to the lobby',
   'results.waitHost': 'Waiting for the host to pick what is next...',
+  'results.allDone': 'All 10 levels are done. More are coming!',
 
   'setting.jungle': 'The Jungle',
   'setting.temple': 'The Temple',
@@ -176,6 +178,7 @@ export const fr: Record<string, string> = {
   'err.network': 'Problème de connexion. Vérifie ton réseau et réessaie.',
   'err.playerLeft': 'Un joueur a quitté la partie.',
   'err.hostLeft': "L'hôte a quitté la partie.",
+  'err.linkFailed': "La connexion avec un autre joueur n'a pas pu être établie (réseau strict ?). Quitte et crée une nouvelle salle, ou essaie un autre réseau.",
 
   'results.won': 'Bombe désamorcée !',
   'results.lost': 'Boum ! La bombe a explosé.',
@@ -184,6 +187,7 @@ export const fr: Record<string, string> = {
   'results.retry': 'Réessayer',
   'results.lobby': 'Retour à la salle',
   'results.waitHost': "On attend que l'hôte choisisse la suite...",
+  'results.allDone': "Les 10 niveaux sont terminés. D'autres arrivent !",
 
   'setting.jungle': 'La Jungle',
   'setting.temple': 'Le Temple',

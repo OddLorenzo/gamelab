@@ -3,12 +3,13 @@ export interface Progress {
 }
 
 const STORAGE_KEY = 'mb.progress';
-const MAX_LEVEL = 100;
+/** The engine supports 100 levels; version 0 ships (unlocks, saves) levels 1..10 only. */
+export const V0_MAX_LEVEL = 10;
 
 /** Used when localStorage is missing or throws: progress then lasts for this page load only. */
 let memory: Progress = { stars: {} };
 
-const validLevel = (id: number): boolean => Number.isInteger(id) && id >= 1 && id <= MAX_LEVEL;
+const validLevel = (id: number): boolean => Number.isInteger(id) && id >= 1 && id <= V0_MAX_LEVEL;
 const validStars = (n: number): boolean => Number.isInteger(n) && n >= 0 && n <= 3;
 
 const copy = (p: Progress): Progress => ({ stars: { ...p.stars } });
@@ -59,6 +60,6 @@ export function saveStars(levelId: number, stars: 0 | 1 | 2 | 3): Progress {
 /** Level 1 is always open; level n opens once level n-1 has at least 1 star. */
 export function unlockedLevels(p: Progress): number[] {
   const out: number[] = [];
-  for (let n = 1; n <= MAX_LEVEL; n++) if (n === 1 || (p.stars[n - 1] ?? 0) >= 1) out.push(n);
+  for (let n = 1; n <= V0_MAX_LEVEL; n++) if (n === 1 || (p.stars[n - 1] ?? 0) >= 1) out.push(n);
   return out;
 }
