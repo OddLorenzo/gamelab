@@ -2,15 +2,15 @@
  * Display character for each glyph id of the manual's symbol table (SYMBOL_COLUMNS, 20 ids).
  * Players describe a glyph by its NAME over voice, so each shape reads as its name as far as
  * plain system-font symbols allow, and no two shapes look alike (no two radial / sun / star
- * bursts, one star only). Plain text symbols from the Miscellaneous Symbols, Dingbats, Arrows,
- * Geometric Shapes, Greek and Cyrillic blocks. A few base characters also have a color-emoji
+ * bursts, one star only). Plain text symbols from the Unicode symbol, arrow, shape and math
+ * blocks plus '@', never a letter of an alphabet. A few base characters also have a color-emoji
  * form (anchor, cloud, tree, gear, flame): those carry U+FE0E so every browser draws them as
  * text in the page font color. The ids come from src/core and never change; the shape may.
  */
 export const GLYPH_CHARS: Record<string, string> = {
   flame: '♨\uFE0E', // hot springs: steam / heat
   spiral: '@', // a curl that winds inward
-  crab: 'Ж', // Cyrillic zhe: a body with pincers and legs
+  crab: '⌘', // looped square: a body with four claws
   hand: '☞', // pointing hand
   anchor: '⚓\uFE0E',
   eye: '◉', // fisheye: ring and pupil
@@ -25,8 +25,8 @@ export const GLYPH_CHARS: Record<string, string> = {
   gear: '⚙\uFE0E', // cog
   bolt: '↯', // zigzag arrow
   drop: '▼', // downward point
-  star: '★',
-  bell: 'Ω', // omega: a bell outline
+  star: '✦', // four-pointed star
+  bell: '⍾', // the Unicode bell symbol
   wave: '≈',
 };
 

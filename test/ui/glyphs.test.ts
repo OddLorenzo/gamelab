@@ -11,7 +11,7 @@ import { GLYPH_CHARS, glyphChar } from '../../src/ui/glyphs';
 const SHAPES: Record<string, { char: string; family: string }> = {
   flame: { char: '♨\uFE0E', family: 'steam' },
   spiral: { char: '@', family: 'curl' },
-  crab: { char: 'Ж', family: 'cross' },
+  crab: { char: '⌘', family: 'loops' },
   hand: { char: '☞', family: 'hand' },
   anchor: { char: '⚓\uFE0E', family: 'hook' },
   eye: { char: '◉', family: 'circle' },
@@ -26,8 +26,8 @@ const SHAPES: Record<string, { char: string; family: string }> = {
   gear: { char: '⚙\uFE0E', family: 'gear' },
   bolt: { char: '↯', family: 'zigzag' },
   drop: { char: '▼', family: 'triangle' },
-  star: { char: '★', family: 'star' },
-  bell: { char: 'Ω', family: 'arch' },
+  star: { char: '✦', family: 'star' },
+  bell: { char: '⍾', family: 'bell' },
   wave: { char: '≈', family: 'wave' },
 };
 const SHAPE_FAMILY: Record<string, string> = Object.fromEntries(Object.entries(SHAPES).map(([id, v]) => [id, v.family]));
@@ -62,6 +62,13 @@ describe('glyphs', () => {
 
   it('no char is a plain letter-like digit or a keycap: the table never reads as text', () => {
     for (const id of IDS) expect(GLYPH_CHARS[id], id).not.toMatch(/^[0-9#*]$/u);
+  });
+
+  it('uses no letter of any alphabet (no Greek or Cyrillic look-alikes) and none of ★ ☆ Ω Ж', () => {
+    for (const id of IDS) {
+      expect(GLYPH_CHARS[id], id).not.toMatch(/\p{L}/u);
+      expect(['★', '☆', 'Ω', 'Ж']).not.toContain(GLYPH_CHARS[id]);
+    }
   });
 
   it('glyphChar returns the mapped char and a visible fallback for an unknown id', () => {
