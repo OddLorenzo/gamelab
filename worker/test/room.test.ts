@@ -1,16 +1,25 @@
 import { env, exports } from 'cloudflare:workers';
-import { runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
+import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
+import { MAX_JOINS, makeId } from '../src/room';
 
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ';
 const BASE = 'https://signal.test';
 const TEN_MIN = 10 * 60_000;
 
 async function createRoom(): Promise<string> {
-  const res = await exports.default.fetch(`${BASE}/rooms`, { method: 'POST' });
+  const res = await api(`${BASE}/rooms`, { method: 'POST' });
   expect(res.status).toBe(201);
   const body = (await res.json()) as { code: string };
   return body.code;
+}
+
+let ipCounter = 0;
+/** Every request comes from a fresh client IP so the per-IP limits (see limits.test.ts) never leak between tests. */
+function api(url: string, init: RequestInit = {}): Promise<Response> {
+  ipCounter += 1;
+  const ip = `198.18.${Math.floor(ipCounter / 250)}.${ipCounter % 250}`;
+  return exports.default.fetch(url, { ...init, headers: { 'CF-Connecting-IP': ip, ...init.headers } });
 }
 
 type Msg = Record<string, unknown>;
@@ -23,7 +32,12 @@ class Client {
   constructor(readonly ws: WebSocket) {
     ws.accept();
     ws.addEventListener('message', (e) => {
-      this.msgs.push(JSON.parse(e.data as string) as Msg);
+      const raw = e.data as string;
+      try {
+        this.msgs.push(JSON.parse(raw) as Msg);
+      } catch {
+        this.msgs.push({ raw }); // a non-JSON frame such as the keepalive pong
+      }
       this.waiters.splice(0).forEach((w) => w());
     });
     ws.addEventListener('close', (e) => {
@@ -59,7 +73,7 @@ class Client {
 }
 
 async function connect(code: string): Promise<Client> {
-  const res = await exports.default.fetch(`${BASE}/rooms/${code}/ws`, { headers: { Upgrade: 'websocket' } });
+  const res = await api(`${BASE}/rooms/${code}/ws`, { headers: { Upgrade: 'websocket' } });
   expect(res.status).toBe(101);
   expect(res.webSocket).toBeTruthy();
   return new Client(res.webSocket!);
@@ -83,7 +97,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe('POST /rooms', () => {
   it('returns a 4-letter code from the 23-letter alphabet', async () => {
-    const res = await exports.default.fetch(`${BASE}/rooms`, { method: 'POST' });
+    const res = await api(`${BASE}/rooms`, { method: 'POST' });
     expect(res.status).toBe(201);
     expect(res.headers.get('content-type')).toContain('application/json');
     const body = (await res.json()) as { code: string };
@@ -114,34 +128,34 @@ describe('POST /rooms', () => {
 
 describe('routing', () => {
   it('unknown route returns 404 not-found', async () => {
-    const res = await exports.default.fetch(`${BASE}/nope`);
+    const res = await api(`${BASE}/nope`);
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: 'not-found' });
   });
 
   it('wrong method returns 405', async () => {
-    const res = await exports.default.fetch(`${BASE}/rooms`, { method: 'GET' });
+    const res = await api(`${BASE}/rooms`, { method: 'GET' });
     expect(res.status).toBe(405);
     const code = await createRoom();
-    const res2 = await exports.default.fetch(`${BASE}/rooms/${code}/ws`, { method: 'POST' });
+    const res2 = await api(`${BASE}/rooms/${code}/ws`, { method: 'POST' });
     expect(res2.status).toBe(405);
   });
 
   it('non-websocket request to /ws returns 426', async () => {
     const code = await createRoom();
-    const res = await exports.default.fetch(`${BASE}/rooms/${code}/ws`);
+    const res = await api(`${BASE}/rooms/${code}/ws`);
     expect(res.status).toBe(426);
   });
 
   it('unknown code returns 404 no-room', async () => {
-    const res = await exports.default.fetch(`${BASE}/rooms/ZZZZ/ws`, { headers: { Upgrade: 'websocket' } });
+    const res = await api(`${BASE}/rooms/ZZZZ/ws`, { headers: { Upgrade: 'websocket' } });
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: 'no-room' });
   });
 
   it('malformed codes return 404 no-room', async () => {
     for (const bad of ['ABC', 'ABCDE', 'abcd', 'ABCI', 'ABCL', 'ABCO', 'AB1D', 'AB-D']) {
-      const res = await exports.default.fetch(`${BASE}/rooms/${bad}/ws`, { headers: { Upgrade: 'websocket' } });
+      const res = await api(`${BASE}/rooms/${bad}/ws`, { headers: { Upgrade: 'websocket' } });
       expect(res.status, bad).toBe(404);
       expect(await res.json(), bad).toEqual({ error: 'no-room' });
     }
@@ -326,7 +340,7 @@ describe('room expiry', () => {
 
     expect(await runDurableObjectAlarm(stub)).toBe(true);
 
-    const res = await exports.default.fetch(`${BASE}/rooms/${code}/ws`, { headers: { Upgrade: 'websocket' } });
+    const res = await api(`${BASE}/rooms/${code}/ws`, { headers: { Upgrade: 'websocket' } });
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: 'no-room' });
   });
@@ -360,7 +374,7 @@ describe('room expiry', () => {
     expect(delta).toBeLessThanOrEqual(TEN_MIN);
 
     expect(await runDurableObjectAlarm(stub)).toBe(true);
-    const res = await exports.default.fetch(`${BASE}/rooms/${code}/ws`, { headers: { Upgrade: 'websocket' } });
+    const res = await api(`${BASE}/rooms/${code}/ws`, { headers: { Upgrade: 'websocket' } });
     expect(res.status).toBe(404);
   });
 
@@ -376,5 +390,128 @@ describe('room expiry', () => {
     const b = await connect(code);
     await b.waitCount(2);
     expect(b.closed).toBeNull();
+  });
+});
+
+const ID_RE = /^[a-z0-9]{8}$/;
+const prefixOf = (id: string): string => id.slice(0, 3);
+
+describe('ids come in join order (the room creator is the lowest id, so the host)', () => {
+  it('first, second and third joiner get strictly increasing ids of the old 8-char format', async () => {
+    const code = await createRoom();
+    const [a, b, c] = await joinThree(code);
+    for (const x of [a, b, c]) expect(x.id).toMatch(ID_RE);
+    expect(a.id < b.id).toBe(true);
+    expect(b.id < c.id).toBe(true);
+    expect([a.id, b.id, c.id].sort()).toEqual([a.id, b.id, c.id]);
+    expect([prefixOf(a.id), prefixOf(b.id), prefixOf(c.id)]).toEqual(['000', '001', '002']);
+  });
+
+  it('a leave and rejoin gets an id greater than every current id, also when the FIRST joiner left', async () => {
+    const code = await createRoom();
+    const [a, b, c] = await joinThree(code);
+    a.ws.close(1000, 'bye');
+    await b.waitCount(4);
+    const d = await connect(code);
+    await d.waitCount(2);
+    expect(d.id).toMatch(ID_RE);
+    expect(d.id > a.id && d.id > b.id && d.id > c.id).toBe(true);
+    expect(prefixOf(d.id)).toBe('003');
+  });
+
+  it('a rejected 4th socket does not advance the counter', async () => {
+    const code = await createRoom();
+    const stub = env.ROOM.get(env.ROOM.idFromName(code));
+    const [a, b, c] = await joinThree(code);
+    const d = await connect(code);
+    await d.waitFor(() => d.closed !== null, '4th socket close');
+    expect(d.closed).toEqual({ code: 4001, reason: 'full' });
+    expect(await runInDurableObject(stub, (_i, state) => state.storage.get('joins'))).toBe(3);
+    c.ws.close(1000, 'bye');
+    await a.waitCount(5);
+    const e = await connect(code);
+    await e.waitCount(2);
+    expect(prefixOf(e.id)).toBe('003'); // counter + 1 after the three real joins, not 004
+    expect(e.id > b.id).toBe(true);
+  });
+
+  it('the counter survives an eviction (hibernation): the next joiner still sorts after the first', async () => {
+    const code = await createRoom();
+    const stub = env.ROOM.get(env.ROOM.idFromName(code));
+    const a = await connect(code);
+    await a.waitCount(2);
+    await evictDurableObject(stub); // in-memory state is gone, storage and the hibernated socket stay
+    const b = await connect(code);
+    await b.waitCount(2);
+    expect(prefixOf(a.id)).toBe('000');
+    expect(prefixOf(b.id)).toBe('001');
+    expect(b.id > a.id).toBe(true);
+  });
+
+  it('ids are unique over many joins and leaves and always rise', async () => {
+    const code = await createRoom();
+    const ids: string[] = [];
+    let held: Client[] = [];
+    for (let i = 0; i < 8; i++) {
+      const x = await connect(code);
+      await x.waitCount(2);
+      ids.push(x.id);
+      held.push(x);
+      if (held.length === 3) {
+        const gone = held.shift()!;
+        gone.ws.close(1000, 'bye');
+        await held[0].waitFor(() => held[0].msgs.filter((m) => m.type === 'peers').length >= 2, 'peers after leave');
+      }
+    }
+    expect(new Set(ids).size).toBe(ids.length);
+    expect([...ids].sort()).toEqual(ids);
+    for (const id of ids) expect(id).toMatch(ID_RE);
+  });
+
+  it('refuses further joins with 4001 full once the counter is exhausted; the last value is zzz', async () => {
+    const code = await createRoom();
+    const stub = env.ROOM.get(env.ROOM.idFromName(code));
+    await runInDurableObject(stub, (_i, state) => state.storage.put('joins', MAX_JOINS - 1));
+    const last = await connect(code);
+    await last.waitCount(2);
+    expect(prefixOf(last.id)).toBe('zzz');
+    last.ws.close(1000, 'bye');
+    await sleep(50);
+    const over = await connect(code);
+    await over.waitFor(() => over.closed !== null, 'overflow close');
+    expect(over.closed).toEqual({ code: 4001, reason: 'full' });
+    expect(over.msgs).toEqual([]);
+  });
+
+  it('makeId: 3 base-36 counter digits then 5 random lowercase alphanumerics', () => {
+    expect(makeId(0)).toMatch(/^000[a-z0-9]{5}$/);
+    expect(makeId(35)).toMatch(/^00z[a-z0-9]{5}$/);
+    expect(makeId(36)).toMatch(/^010[a-z0-9]{5}$/);
+    expect(makeId(MAX_JOINS - 1)).toMatch(/^zzz[a-z0-9]{5}$/);
+    expect(makeId(7)).not.toBe(makeId(7)); // random tail
+    for (let n = 0; n < 2000; n += 37) expect(makeId(n) < makeId(n + 1)).toBe(true);
+  });
+});
+
+describe('keepalive', () => {
+  it('answers the text frame ping with pong, to the sender only, and relays nothing', async () => {
+    const code = await createRoom();
+    const [a, b, c] = await joinThree(code);
+    a.send('ping');
+    await a.waitFor(() => a.msgs.some((m) => m.raw === 'pong'), 'pong');
+    expect(a.msgs[a.msgs.length - 1]).toEqual({ raw: 'pong' });
+    b.send({ type: 'marker' });
+    await c.waitCount(3);
+    expect(b.msgs.map((m) => m.type)).toEqual(['hello', 'peers', 'peers']);
+    expect(c.msgs.map((m) => m.type)).toEqual(['hello', 'peers', 'marker']);
+  });
+
+  it('still answers pong after the Room was evicted (answered without waking it)', async () => {
+    const code = await createRoom();
+    const a = await connect(code);
+    await a.waitCount(2);
+    await evictDurableObject(env.ROOM.get(env.ROOM.idFromName(code)));
+    a.send('ping');
+    await a.waitFor(() => a.msgs.some((m) => m.raw === 'pong'), 'pong after eviction');
   });
 });

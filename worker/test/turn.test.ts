@@ -246,7 +246,7 @@ describe('rate limit', () => {
     for (let i = 0; i < 20; i++) await getTurn(ip);
     expect((await getTurn(ip)).status).toBe(429);
 
-    const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(ip));
+    const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(`turn:${ip}`));
     const alarmAt = await runInDurableObject(stub, (_i, state) => state.storage.getAlarm());
     expect(alarmAt).not.toBeNull();
     const delta = alarmAt! - Date.now();
@@ -265,7 +265,7 @@ describe('rate limit', () => {
     for (let i = 0; i < 20; i++) await getTurn(ip);
     expect((await getTurn(ip)).status).toBe(429);
 
-    const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(ip));
+    const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(`turn:${ip}`));
     // age the stored window by 61 s, as if the clock had moved on
     await runInDurableObject(stub, async (_i, state) => {
       const all = await state.storage.list();
@@ -282,7 +282,7 @@ describe('rate limit', () => {
     stubFetch(async () => providerOk());
     const ip = freshIp();
     await getTurn(ip);
-    const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(ip));
+    const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(`turn:${ip}`));
     const first = await runInDurableObject(stub, (_i, state) => state.storage.getAlarm());
     await new Promise((r) => setTimeout(r, 30));
     await getTurn(ip);

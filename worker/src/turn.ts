@@ -1,8 +1,7 @@
-import type { RateDecision } from './rate-limiter';
+import { rateLimited } from './limits';
 
 export const TURN_TTL_SEC = 3600;
 const PROVIDER_TIMEOUT_MS = 5000;
-const NO_IP = 'no-ip';
 const STUN = { urls: ['stun:stun.cloudflare.com:3478'] };
 
 type IceServer = { urls: string[]; username?: string; credential?: string };
@@ -48,9 +47,8 @@ async function fetchTurnServer(env: Cloudflare.Env): Promise<IceServer | null> {
 export async function handleTurn(request: Request, env: Cloudflare.Env): Promise<Response> {
   if (request.method !== 'GET') return json({ error: 'method-not-allowed' }, 405, { allow: 'GET' });
 
-  const ip = request.headers.get('CF-Connecting-IP') || NO_IP;
-  const decision = await (env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(ip)) as unknown as { hit(): Promise<RateDecision> }).hit();
-  if (!decision.ok) return json({ error: 'rate-limited' }, 429, { 'retry-after': String(decision.retryAfterSec) });
+  const limited = await rateLimited(request, env, 'turn');
+  if (limited) return limited;
 
   const turn = await fetchTurnServer(env);
   return json({ iceServers: turn ? [STUN, turn] : [STUN], ttlSec: TURN_TTL_SEC }, 200);

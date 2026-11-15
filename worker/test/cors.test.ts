@@ -33,7 +33,7 @@ type Init = { method?: string; origin?: string | null; ip?: string; headers?: Re
 function call(path: string, { method = 'GET', origin = null, ip, headers = {} }: Init = {}): Promise<Response> {
   const h: Record<string, string> = { ...headers };
   if (origin !== null) h.Origin = origin;
-  if (ip) h['CF-Connecting-IP'] = ip;
+  h['CF-Connecting-IP'] = ip ?? freshIp();
   return exports.default.fetch(`${BASE}${path}`, { method, headers: h });
 }
 
@@ -47,7 +47,7 @@ function envWith(allowed: string | undefined): Cloudflare.Env {
 function withEnv(allowed: string | undefined, path: string, init: Init = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (init.origin !== undefined && init.origin !== null) headers.set('Origin', init.origin);
-  if (init.ip) headers.set('CF-Connecting-IP', init.ip);
+  headers.set('CF-Connecting-IP', init.ip ?? freshIp());
   return worker.fetch(new Request(`${BASE}${path}`, { method: init.method ?? 'GET', headers }), envWith(allowed));
 }
 

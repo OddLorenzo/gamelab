@@ -1,4 +1,5 @@
 import { PREFLIGHT_HEADERS, allowedOriginOf, withCors } from './cors';
+import { rateLimited } from './limits';
 import { handleTurn } from './turn';
 
 export { Room } from './room';
@@ -41,6 +42,8 @@ async function route(request: Request, env: Cloudflare.Env): Promise<Response> {
 
   if (pathname === '/rooms') {
     if (request.method !== 'POST') return json({ error: 'method-not-allowed' }, 405, { allow: 'POST' });
+    const limited = await rateLimited(request, env, 'rooms');
+    if (limited) return limited;
     return createRoom(env);
   }
 
@@ -49,6 +52,9 @@ async function route(request: Request, env: Cloudflare.Env): Promise<Response> {
   const m = /^\/rooms\/([^/]+)\/ws$/.exec(pathname);
   if (m) {
     if (request.method !== 'GET') return json({ error: 'method-not-allowed' }, 405, { allow: 'GET' });
+    // Counted before the code is looked at: probing codes (found or not) must cost quota.
+    const limited = await rateLimited(request, env, 'ws');
+    if (limited) return limited;
     const code = m[1];
     if (!CODE_RE.test(code)) return json({ error: 'no-room' }, 404);
     const stub = env.ROOM.get(env.ROOM.idFromName(code));
