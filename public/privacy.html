@@ -87,7 +87,7 @@
 
       <h2>Connecting the players</h2>
       <p>To put the three players in contact, the game uses a small service (a Cloudflare Worker). To do this it sees the 4-letter room code, a temporary connection identifier and your IP address. It uses them only to connect the players and to limit abuse. The game does not store your IP address: the request counter that limits abuse (used only for the relay-credential request) keeps a start time and a count under an identifier derived from the IP address, for about one minute. The room itself (a creation timestamp under the room code) is deleted a few minutes at most (10) after the room empties, or after it was created if nobody joined. Neither is used for anything else.</p>
-      <p>With a direct (peer-to-peer) connection, the other players in the room can see your IP address, which is how a direct connection works; the connection setup messages between devices also pass through the game's Worker. When the game cannot get relay credentials from its own server, your browser falls back to public STUN servers run by Cloudflare (<code>stun.cloudflare.com</code>) and Google (<code>stun.l.google.com</code>), which see your public IP address when your browser asks them for connection candidates. The site and the Worker are hosted by Cloudflare, which may keep ordinary network or request logs outside the game's control.</p>
+      <p>With a direct (peer-to-peer) connection, the other players in the room can see your IP address, which is how a direct connection works; the connection setup messages between devices also pass through the game's Worker. The game's own server always lists Cloudflare's public STUN server (<code>stun.cloudflare.com</code>) in the connection settings it gives your browser, so Cloudflare sees the IP address of every player. When the game cannot get those settings at all, your browser falls back to public STUN servers run by Cloudflare and Google (<code>stun.l.google.com</code>); they see your public IP address when your browser asks them for connection candidates. The site and the Worker are hosted by Cloudflare, which may keep ordinary network or request logs outside the game's control.</p>
       <p>When a direct connection between two devices is impossible (some networks and mobile data), a relay server (TURN) may carry the traffic between them. This traffic is encrypted (WebRTC encrypts audio and game data), so the relay cannot listen to it. The relay sees, as any network does, that two addresses exchange data.</p>
 
       <h2>Taking back the microphone permission</h2>
@@ -100,8 +100,8 @@
       <h2>Children</h2>
       <p>The game has no text chat and no accounts. It does have voice between the players who joined the same room, so only share the room code with people you know. Parents and guardians decide whether a child may use the microphone.</p>
 
-      <h2>Contact</h2>
-      <p>Questions about this page: <a href="mailto:OWNER_EMAIL">OWNER_EMAIL</a></p>
+      <h2>Who is responsible, and contact</h2>
+      <p>The person responsible for this game is OWNER_NAME. You can write to <a href="mailto:OWNER_EMAIL">OWNER_EMAIL</a> to ask what is held about you, or with any question about this page. The game keeps no account, so what can be held is short: see the sections above.</p>
       <p><a class="back" href="./">Back to the game</a></p>
     </section>
 
@@ -121,7 +121,7 @@
 
       <h2>Mise en relation des joueurs</h2>
       <p>Pour mettre les trois joueurs en contact, le jeu utilise un petit service (un Cloudflare Worker). Il voit pour cela le code de salle à 4 lettres, un identifiant de connexion temporaire et votre adresse IP. Il les utilise seulement pour connecter les joueurs et limiter les abus. Le jeu ne stocke pas votre adresse IP : le compteur de requêtes qui limite les abus (utilisé uniquement pour la demande d'identifiants du relais) garde une heure de début et un nombre, sous un identifiant dérivé de l'adresse IP, pendant environ une minute. La salle elle-même (un horodatage de création sous le code de salle) est supprimée au plus quelques minutes (10) après que la salle s'est vidée, ou après sa création si personne ne l'a rejointe. Ni l'un ni l'autre ne sert à autre chose.</p>
-      <p>Avec une connexion directe (pair à pair), les autres joueurs de la salle peuvent voir votre adresse IP, c'est ainsi que fonctionne une connexion directe ; les messages de mise en place de la connexion entre appareils passent aussi par le Worker du jeu. Quand le jeu ne peut pas obtenir d'identifiants de relais auprès de son propre serveur, votre navigateur se rabat sur des serveurs STUN publics de Cloudflare (<code>stun.cloudflare.com</code>) et de Google (<code>stun.l.google.com</code>), qui voient votre adresse IP publique quand votre navigateur leur demande des candidats de connexion. Le site et le Worker sont hébergés par Cloudflare, qui peut conserver des journaux réseau ou de requêtes ordinaires, hors du contrôle du jeu.</p>
+      <p>Avec une connexion directe (pair à pair), les autres joueurs de la salle peuvent voir votre adresse IP, c'est ainsi que fonctionne une connexion directe ; les messages de mise en place de la connexion entre appareils passent aussi par le Worker du jeu. Le serveur du jeu indique toujours le serveur STUN public de Cloudflare (<code>stun.cloudflare.com</code>) dans les réglages de connexion qu'il donne à votre navigateur : Cloudflare voit donc l'adresse IP de chaque joueur. Quand le jeu ne peut pas obtenir ces réglages du tout, votre navigateur se rabat sur des serveurs STUN publics de Cloudflare et de Google (<code>stun.l.google.com</code>) ; ils voient votre adresse IP publique quand votre navigateur leur demande des candidats de connexion. Le site et le Worker sont hébergés par Cloudflare, qui peut conserver des journaux réseau ou de requêtes ordinaires, hors du contrôle du jeu.</p>
       <p>Quand une connexion directe entre deux appareils est impossible (certains réseaux et les données mobiles), un serveur relais (TURN) peut transporter les échanges entre eux. Ces échanges sont chiffrés (WebRTC chiffre l'audio et les données de jeu) : le relais ne peut pas les écouter. Le relais voit, comme tout réseau, que deux adresses échangent des données.</p>
 
       <h2>Retirer l'autorisation du microphone</h2>
@@ -134,8 +134,8 @@
       <h2>Enfants</h2>
       <p>Le jeu n'a ni messagerie écrite ni compte. Il comporte de la voix entre les joueurs qui ont rejoint la même salle : ne partagez le code de salle qu'avec des personnes que vous connaissez. Les parents et tuteurs décident si un enfant peut utiliser le microphone.</p>
 
-      <h2>Contact</h2>
-      <p>Questions sur cette page : <a href="mailto:OWNER_EMAIL">OWNER_EMAIL</a></p>
+      <h2>Qui est responsable, et contact</h2>
+      <p>La personne responsable de ce jeu est OWNER_NAME. Vous pouvez écrire à <a href="mailto:OWNER_EMAIL">OWNER_EMAIL</a> pour demander ce qui est conservé à votre sujet, ou pour toute question sur cette page. Le jeu n'a pas de compte, donc ce qui peut être conservé est limité : voir les sections ci-dessus.</p>
       <p><a class="back" href="./">Retour au jeu</a></p>
     </section>
   </main>
