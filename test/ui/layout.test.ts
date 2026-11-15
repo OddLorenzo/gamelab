@@ -144,13 +144,13 @@ describe('general geometry', () => {
     expect(layout.map((m) => m.display !== null)).toEqual([false, false, true, true]);
   });
 
-  it('2 modules: side by side on a landscape canvas, stacked on a portrait one', () => {
-    const land = computeLayout([WIRES(4, 'a'), KEYS('b')], 16 / 9);
-    expect(land[0].frame.y).toBeCloseTo(land[1].frame.y, 9);
-    expect(land[0].frame.x).toBeLessThan(land[1].frame.x);
-    const port = computeLayout([WIRES(4, 'a'), KEYS('b')], 9 / 16);
-    expect(port[0].frame.x).toBeCloseTo(port[1].frame.x, 9);
-    expect(port[0].frame.y).toBeLessThan(port[1].frame.y);
+  it('2 modules: stacked (first above second, same x range) on every aspect, landscape included', () => {
+    for (const aspect of [9 / 16, 1, 16 / 9, 2.4]) {
+      const [a, b] = computeLayout([WIRES(4, 'a'), KEYS('b')], aspect);
+      expect(a.frame.x).toBeCloseTo(b.frame.x, 9);
+      expect(a.frame.w).toBeCloseTo(b.frame.w, 9);
+      expect(a.frame.y + a.frame.h).toBeLessThanOrEqual(b.frame.y + EPS);
+    }
   });
 
   it('3 and 4 modules form a 2x2 grid in reading order', () => {
@@ -171,6 +171,70 @@ describe('general geometry', () => {
   it('does not mutate its specs', () => {
     const specs = Object.freeze([Object.freeze(WIRES(5))]);
     expect(() => computeLayout(specs as ModuleSpec[], 1)).not.toThrow();
+  });
+});
+
+describe('the same bomb is laid out the same way on every screen shape', () => {
+  // The shared pointer travels as 0..1 canvas coordinates, so a point must mean the same module on a
+  // portrait phone and on a desktop. Slot x/w shrink with the aspect (round and square parts are
+  // sized in height units), so rects are not strictly equal: the ARRANGEMENT must be.
+  const SHAPES = [375 / 667, 1, 1280 / 720];
+  const COUNTS: ModuleSpec[][] = [
+    [WIRES(5, 'a')],
+    [WIRES(5, 'a'), KEYS('b')],
+    [WIRES(5, 'a'), spec('button', 1, 'b'), KEYS('c')],
+    [WIRES(5, 'a'), spec('button', 1, 'b'), spec('symbols', 4, 'c'), KEYS('d')],
+  ];
+  const levelSpecs = (id: number): ModuleSpec[] =>
+    specsFromDeaf(projectView(createSession(buildLevel(id)), 'deaf') as DeafView);
+  const cases: [string, ModuleSpec[]][] = [
+    ...COUNTS.map((c, i): [string, ModuleSpec[]] => [`${String(i + 1)} module(s)`, c]),
+    ...Array.from({ length: 10 }, (_, i): [string, ModuleSpec[]] => [`level ${String(i + 1)}`, levelSpecs(i + 1)]),
+  ];
+  const sign = (n: number): number => (Math.abs(n) < 1e-6 ? 0 : Math.sign(n));
+  const half = (c: number): number => sign(c - 0.5);
+
+  it.each(cases)('%s: frame order, adjacency and halves agree at every aspect', (_name, specs) => {
+    const layouts = SHAPES.map((a) => computeLayout(specs, a));
+    const ref = layouts[0];
+    for (const layout of layouts) {
+      for (let i = 0; i < ref.length; i++) {
+        const ci = { x: layout[i].frame.x + layout[i].frame.w / 2, y: layout[i].frame.y + layout[i].frame.h / 2 };
+        const ri = { x: ref[i].frame.x + ref[i].frame.w / 2, y: ref[i].frame.y + ref[i].frame.h / 2 };
+        expect(half(ci.x)).toBe(half(ri.x));
+        expect(half(ci.y)).toBe(half(ri.y));
+        // the centre of this frame is inside the same frame on the other screen shape
+        expect(inside({ x: ci.x, y: ci.y, w: 0, h: 0 }, ref[i].frame)).toBe(true);
+        for (let j = 0; j < ref.length; j++) {
+          if (i === j) continue;
+          const cj = layout[j].frame;
+          const rj = ref[j].frame;
+          expect(sign(layout[i].frame.y - cj.y)).toBe(sign(ref[i].frame.y - rj.y)); // above / same row / below
+          expect(sign(layout[i].frame.x - cj.x)).toBe(sign(ref[i].frame.x - rj.x)); // left / same column / right
+        }
+      }
+    }
+  });
+
+  it.each(cases)('%s: frames share the same vertical placement at every aspect (height-based geometry)', (_name, specs) => {
+    const [first, ...rest] = SHAPES.map((a) => computeLayout(specs, a));
+    for (const layout of rest) {
+      layout.forEach((m, i) => {
+        expect(m.frame.y).toBeCloseTo(first[i].frame.y, 9);
+        expect(m.frame.h).toBeCloseTo(first[i].frame.h, 9);
+      });
+    }
+  });
+
+  it('two modules (levels 3 to 5 shape): a point on the first module lands on the first module on every screen', () => {
+    const specs = [WIRES(5, 'wires'), spec('button', 1, 'button')];
+    for (const aspect of SHAPES) {
+      const [w, b] = computeLayout(specs, aspect);
+      const top = { x: 0.5, y: w.frame.y + w.frame.h / 2 };
+      const bottom = { x: 0.5, y: b.frame.y + b.frame.h / 2 };
+      expect(inside({ ...top, w: 0, h: 0 }, w.frame)).toBe(true);
+      expect(inside({ ...bottom, w: 0, h: 0 }, b.frame)).toBe(true);
+    }
   });
 });
 

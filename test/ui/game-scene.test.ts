@@ -1232,28 +1232,26 @@ describe('canvas size, layout and resize', () => {
   });
 
   it('a resize recomputes the layout with the new aspect (hit testing follows)', () => {
-    // two modules stack on a portrait screen and sit side by side on a landscape one
-    const two: BlindView = { ...blindView, targets: blindView.targets.slice(0, 2) };
+    // the round button disc is a square in pixels: it covers most of a portrait canvas' width and about half of a landscape one's
+    const only: BlindView = { ...blindView, targets: blindView.targets.filter((x) => x.kind === 'button') };
     const rig = mount();
-    rig.game.pushView(two);
+    rig.game.pushView(only);
     rig.frames.flush();
     const canvas = canvasOf(rig);
-    const specs = specsFromBlind(two);
-    const before = centerOf(specs, ids['wires'], 1);
+    const near = { x: 0.9, y: 0.5 }; // normalized: inside the disc's square when portrait, outside it when landscape
+    tap(canvas, { x: near.x * 375, y: near.y * 667 });
+    expect(rig.game.acts).toEqual([{ moduleId: ids['button'], action: { kind: 'button', type: 'press' } }]);
     size.w = 1280;
     size.h = 720;
     window.dispatchEvent(new Event('resize'));
     rig.frames.flush();
     expect(canvas.width).toBe(1280);
     expect(canvas.height).toBe(720);
-    const after = centerOf(specs, ids['wires'], 1, 1280, 720);
-    expect(Math.hypot(after.x / 1280 - before.x / 375, after.y / 720 - before.y / 667)).toBeGreaterThan(0.1); // the layouts really differ
-    tap(canvas, after);
-    expect(rig.game.acts).toEqual([{ moduleId: ids['wires'], action: { kind: 'wires', type: 'cut', payload: { index: 1 } } }]);
-    // the old position no longer hits that wire
     rig.game.acts.length = 0;
-    tap(canvas, { x: (before.x / 375) * 1280, y: (before.y / 667) * 720 });
-    expect(rig.game.acts.filter((a) => a.action.type === 'cut' && (a.action.payload as { index: number }).index === 1)).toEqual([]);
+    tap(canvas, { x: near.x * 1280, y: near.y * 720 }); // the old position no longer hits
+    expect(rig.game.acts).toEqual([]);
+    tap(canvas, centerOf(specsFromBlind(only), ids['button'], 0, 1280, 720));
+    expect(rig.game.acts).toEqual([{ moduleId: ids['button'], action: { kind: 'button', type: 'press' } }]);
   });
 
   it('a resize also redraws at the new size', () => {

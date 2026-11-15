@@ -100,15 +100,16 @@ interface U {
 
 const inset = (r: U, d: number): U => ({ x: r.x + d, y: r.y + d, w: Math.max(0, r.w - 2 * d), h: Math.max(0, r.h - 2 * d) });
 
-/** Frames in a grid: 1 full; 2 side by side (aspect >= 1) or stacked; 3+ two per row, a lone last one spans the row. */
-function frames(n: number, area: U, aspect: number): U[] {
+/**
+ * Frames in a grid: 1 full; 2 always stacked (one above the other, whatever the aspect); 3+ two
+ * per row, a lone last one spans the row. The arrangement never depends on the aspect: the
+ * pointer a player shares travels as 0..1 canvas coordinates, so every device must put the same
+ * module in the same part of the canvas.
+ */
+function frames(n: number, area: U): U[] {
   if (n <= 0) return [];
   if (n === 1) return [area];
   if (n === 2) {
-    if (aspect >= 1) {
-      const w = (area.w - FRAME_GAP) / 2;
-      return [0, 1].map((i) => ({ x: area.x + i * (w + FRAME_GAP), y: area.y, w, h: area.h }));
-    }
     const h = (area.h - FRAME_GAP) / 2;
     return [0, 1].map((i) => ({ x: area.x, y: area.y + i * (h + FRAME_GAP), w: area.w, h }));
   }
@@ -177,7 +178,7 @@ function bodyOf(kind: ModuleKind, count: number, inner: U): { display: U | null;
 export function computeLayout(specs: readonly ModuleSpec[], aspect = 1): ModuleLayout[] {
   const a = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
   const area: U = { x: MARGIN, y: HUD_H, w: Math.max(0, a - 2 * MARGIN), h: 1 - HUD_H - MARGIN };
-  const boxes = frames(specs.length, area, a);
+  const boxes = frames(specs.length, area);
   const norm = (r: U): Rect => ({ x: r.x / a, y: r.y, w: r.w / a, h: r.h });
   return specs.map((s, i) => {
     const frame = boxes[i];
