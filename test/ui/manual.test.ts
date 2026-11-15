@@ -72,7 +72,10 @@ const numbered = (text: string): string[] => {
 
 const COLORS: WireColor[] = ['red', 'blue', 'yellow', 'green', 'white'];
 const cnt = (w: WireColor[], c: WireColor): number => w.filter((x) => x === c).length;
-const lastOf = (w: WireColor[], c: WireColor): number => w.lastIndexOf(c);
+const kinds = (w: WireColor[]): number => new Set(w).size;
+const once = (w: WireColor[]): number[] => w.flatMap((c, i) => (cnt(w, c) === 1 ? [i] : []));
+const sameNeighbours = (w: WireColor[]): number[] => w.flatMap((c, i) => (i > 0 && c === w[i - 1] ? [i] : []));
+const firstNotTopColor = (w: WireColor[]): number => w.findIndex((c) => c !== w[0]);
 
 interface WireLine {
   applies: (w: WireColor[]) => boolean;
@@ -85,29 +88,35 @@ interface WireLine {
 /** The manual sentences, as data, in the order the text lists them. First applicable line wins. */
 const WIRE_TEXT: Record<number, WireLine[]> = {
   3: [
-    { applies: (w) => cnt(w, 'red') === 0, cut: () => 1, fr: ['Aucun fil rouge', 'deuxième fil'], en: ['No red wire', 'second wire'] },
-    { applies: (w) => w[2] === 'white', cut: () => 0, fr: ['dernier fil est blanc', 'premier fil'], en: ['last wire is white', 'first wire'] },
-    { applies: (w) => cnt(w, 'blue') > 1, cut: (w) => lastOf(w, 'blue'), fr: ["plus d'un fil bleu", 'dernier fil bleu'], en: ['more than one blue wire', 'last blue wire'] },
-    { applies: () => true, cut: () => 2, fr: ['Sinon', 'dernier fil'], en: ['Otherwise', 'last wire'] },
+    { applies: (w) => w[0] === w[2], cut: () => 1, fr: ['fil du haut et le fil du bas ont la même couleur', 'coupe le fil du milieu'], en: ['top wire and the bottom wire have the same color', 'cut the middle wire'] },
+    { applies: (w) => sameNeighbours(w).length > 0, cut: (w) => once(w)[0], fr: ['deux fils voisins ont la même couleur', "dont la couleur n'apparaît qu'une fois"], en: ['two neighboring wires have the same color', 'whose color is there only once'] },
+    { applies: () => true, cut: (w) => w.indexOf([...w].sort((a, b) => COLORS.indexOf(a) - COLORS.indexOf(b))[0]), fr: ['Sinon', 'vient en premier dans cette liste : rouge, bleu, jaune, vert, blanc'], en: ['Otherwise', 'comes first in this list: red, blue, yellow, green, white'] },
   ],
   4: [
-    { applies: (w) => cnt(w, 'red') > 1, cut: (w) => lastOf(w, 'red'), fr: ["plus d'un fil rouge", 'dernier fil rouge'], en: ['more than one red wire', 'last red wire'] },
-    { applies: (w) => w[3] === 'yellow' && cnt(w, 'red') === 0, cut: () => 0, fr: ['dernier fil est jaune', 'aucun fil rouge', 'premier fil'], en: ['last wire is yellow', 'no red wire', 'first wire'] },
-    { applies: (w) => cnt(w, 'blue') === 1, cut: (w) => lastOf(w, 'blue'), fr: ['exactement un fil bleu', 'ce fil bleu'], en: ['exactly one blue wire', 'that blue wire'] },
-    { applies: (w) => cnt(w, 'yellow') > 1, cut: () => 3, fr: ["plus d'un fil jaune", 'dernier fil'], en: ['more than one yellow wire', 'last wire'] },
-    { applies: () => true, cut: () => 1, fr: ['Sinon', 'deuxième fil'], en: ['Otherwise', 'second wire'] },
+    { applies: (w) => w[1] === w[2], cut: () => 3, fr: ['deuxième et le troisième fil ont la même couleur', 'coupe le fil du bas'], en: ['second and the third wire have the same color', 'cut the bottom wire'] },
+    { applies: (w) => w[0] === w[3], cut: () => 2, fr: ['fil du haut et le fil du bas ont la même couleur', 'coupe le troisième fil'], en: ['top wire and the bottom wire have the same color', 'cut the third wire'] },
+    { applies: (w) => kinds(w) >= 3, cut: (w) => once(w)[0], fr: ['3 couleurs différentes ou plus', "le plus proche du haut dont la couleur n'apparaît qu'une fois"], en: ['3 or more different colors', 'nearest the top whose color is there only once'] },
+    { applies: () => true, cut: firstNotTopColor, fr: ['Sinon', 'en descendant depuis le haut', "premier fil qui n'a pas la couleur du fil du haut"], en: ['Otherwise', 'going down from the top', 'first wire whose color is not the color of the top wire'] },
   ],
   5: [
-    { applies: (w) => w[4] === 'green', cut: () => 3, fr: ['dernier fil est vert', 'quatrième fil'], en: ['last wire is green', 'fourth wire'] },
-    { applies: (w) => cnt(w, 'red') === 1 && cnt(w, 'yellow') > 1, cut: () => 0, fr: ['exactement un fil rouge', "plus d'un fil jaune", 'premier fil'], en: ['exactly one red wire', 'more than one yellow wire', 'first wire'] },
-    { applies: (w) => cnt(w, 'green') === 0, cut: () => 1, fr: ['aucun fil vert', 'deuxième fil'], en: ['no green wire', 'second wire'] },
-    { applies: () => true, cut: () => 0, fr: ['Sinon', 'premier fil'], en: ['Otherwise', 'first wire'] },
+    { applies: (w) => w[1] === w[3], cut: () => 2, fr: ['deuxième et le quatrième fil ont la même couleur', 'coupe le fil du milieu (le troisième)'], en: ['second and the fourth wire have the same color', 'cut the middle wire (the third)'] },
+    { applies: (w) => kinds(w) >= 3, cut: (w) => once(w)[once(w).length - 1], fr: ['3 couleurs différentes ou plus', "le plus proche du bas dont la couleur n'apparaît qu'une fois"], en: ['3 or more different colors', 'nearest the bottom whose color is there only once'] },
+    { applies: (w) => w[0] === w[4], cut: () => 0, fr: ['fil du haut et le fil du bas ont la même couleur', 'coupe le fil du haut'], en: ['top wire and the bottom wire have the same color', 'cut the top wire'] },
+    { applies: () => true, cut: firstNotTopColor, fr: ['Sinon', 'en descendant depuis le haut', "premier fil qui n'a pas la couleur du fil du haut"], en: ['Otherwise', 'going down from the top', 'first wire whose color is not the color of the top wire'] },
   ],
   6: [
-    { applies: (w) => cnt(w, 'yellow') === 0, cut: () => 2, fr: ['Aucun fil jaune', 'troisième fil'], en: ['No yellow wire', 'third wire'] },
-    { applies: (w) => cnt(w, 'yellow') === 1 && cnt(w, 'white') > 1, cut: (w) => lastOf(w, 'white'), fr: ['exactement un fil jaune', "plus d'un fil blanc", 'dernier fil blanc'], en: ['exactly one yellow wire', 'more than one white wire', 'last white wire'] },
-    { applies: (w) => cnt(w, 'white') === 0, cut: () => 5, fr: ['aucun fil blanc', 'dernier fil'], en: ['no white wire', 'last wire'] },
-    { applies: () => true, cut: () => 3, fr: ['Sinon', 'quatrième fil'], en: ['Otherwise', 'fourth wire'] },
+    {
+      applies: (w) => sameNeighbours(w).length === 0,
+      cut: (w) => {
+        const most = Math.max(...w.map((c) => cnt(w, c)));
+        return w.map((c, i) => (cnt(w, c) === most ? i : -1)).reduce((a, b) => Math.max(a, b));
+      },
+      fr: ["Aucun fil n'a la même couleur qu'un fil voisin", 'les couleurs qui apparaissent le plus de fois', 'le plus proche du bas qui a une de ces couleurs'],
+      en: ['No wire has the same color as a neighboring wire', 'the colors that are there the most times', 'nearest the bottom that has one of those colors'],
+    },
+    { applies: (w) => kinds(w) % 2 === 1, cut: (w) => sameNeighbours(w)[0], fr: ['nombre de couleurs différentes est impair (1, 3 ou 5)', 'paire de fils voisins de même couleur la plus proche du haut', 'fil du bas de cette paire'], en: ['number of different colors is odd (1, 3 or 5)', 'pair of neighboring wires with the same color that is nearest the top', 'lower wire of that pair'] },
+    { applies: (w) => once(w).length > 0, cut: (w) => 5 - once(w)[once(w).length - 1], fr: ["une couleur n'apparaît qu'une fois", 'le plus proche du bas', 'son fil miroir', 'comptée depuis le bas', 'premier et sixième, deuxième et cinquième, troisième et quatrième'], en: ['a color is there only once', 'nearest the bottom', 'its mirror wire', 'counted from the bottom', 'first and sixth, second and fifth, third and fourth'] },
+    { applies: () => true, cut: () => 2, fr: ['Sinon', 'coupe le troisième fil'], en: ['Otherwise', 'cut the third wire'] },
   ],
 };
 

@@ -7,49 +7,65 @@ export interface Wire {
   cut: boolean;
 }
 
+/** The colours a wire can have, in the order the 3-wire fallback ranks them. */
 const COLORS: readonly WireColor[] = ['red', 'blue', 'yellow', 'green', 'white'];
 
-const count = (wires: readonly Wire[], color: WireColor): number =>
-  wires.filter((w) => w.color === color).length;
-
-const lastIndexOf = (wires: readonly Wire[], color: WireColor): number => {
-  for (let i = wires.length - 1; i >= 0; i--) {
-    if (wires[i].color === color) return i;
-  }
+const timesOf = (c: readonly WireColor[], color: WireColor): number => c.filter((x) => x === color).length;
+const differentColors = (c: readonly WireColor[]): number => new Set(c).size;
+const appearsOnce = (c: readonly WireColor[], i: number): boolean => timesOf(c, c[i]) === 1;
+const highestOnce = (c: readonly WireColor[]): number => c.findIndex((_, i) => appearsOnce(c, i));
+const lowestOnce = (c: readonly WireColor[]): number => {
+  for (let i = c.length - 1; i >= 0; i--) if (appearsOnce(c, i)) return i;
+  return -1;
+};
+/** Lower wire of the highest pair of neighbouring wires that share a colour, -1 when no such pair. */
+const lowerOfHighestPair = (c: readonly WireColor[]): number => {
+  for (let i = 1; i < c.length; i++) if (c[i] === c[i - 1]) return i;
+  return -1;
+};
+/** First wire, from the top, whose colour differs from the top wire; -1 when all share one colour. */
+const firstChange = (c: readonly WireColor[]): number => c.findIndex((x) => x !== c[0]);
+/** Highest wire whose colour comes first in COLORS. */
+const earliestInList = (c: readonly WireColor[]): number => {
+  let best = 0;
+  for (let i = 1; i < c.length; i++) if (COLORS.indexOf(c[i]) < COLORS.indexOf(c[best])) best = i;
+  return best;
+};
+/** Lowest wire whose colour is one of the colours that appear the most times. */
+const lowestOfMostCommon = (c: readonly WireColor[]): number => {
+  const most = Math.max(...c.map((x) => timesOf(c, x)));
+  for (let i = c.length - 1; i >= 0; i--) if (timesOf(c, c[i]) === most) return i;
   return -1;
 };
 
 /**
  * Pure rule table, same order as the manual. Depends on colors only (never the cut flag),
  * so exactly one index is correct for any 3..6 wire layout. First matching rule wins.
+ * Index 0 is the top wire.
  */
 export function correctIndex(wires: readonly Wire[]): number {
-  const last = wires.length - 1;
-  const lastColor = wires[last].color;
-  switch (wires.length) {
+  const c = wires.map((w) => w.color);
+  const bottom = c.length - 1;
+  switch (c.length) {
     case 3:
-      if (count(wires, 'red') === 0) return 1;
-      if (lastColor === 'white') return 0;
-      if (count(wires, 'blue') > 1) return lastIndexOf(wires, 'blue');
-      return last;
+      if (c[0] === c[2]) return 1; // manual line 1
+      if (lowerOfHighestPair(c) !== -1) return highestOnce(c); // line 2
+      return earliestInList(c); // line 3
     case 4:
-      if (count(wires, 'red') > 1) return lastIndexOf(wires, 'red');
-      if (lastColor === 'yellow' && count(wires, 'red') === 0) return 0;
-      if (count(wires, 'blue') === 1) return lastIndexOf(wires, 'blue');
-      if (count(wires, 'yellow') > 1) return last;
-      return 1;
+      if (c[1] === c[2]) return bottom; // line 1
+      if (c[0] === c[3]) return 2; // line 2
+      if (differentColors(c) >= 3) return highestOnce(c); // line 3
+      return firstChange(c); // line 4
     case 5:
-      if (lastColor === 'green') return 3;
-      if (count(wires, 'red') === 1 && count(wires, 'yellow') > 1) return 0;
-      if (count(wires, 'green') === 0) return 1;
-      return 0;
+      if (c[1] === c[3]) return 2; // line 1
+      if (differentColors(c) >= 3) return lowestOnce(c); // line 2
+      if (c[0] === c[4]) return 0; // line 3
+      return firstChange(c); // line 4
     case 6:
-      if (count(wires, 'yellow') === 0) return 2;
-      if (count(wires, 'yellow') === 1 && count(wires, 'white') > 1) {
-        return lastIndexOf(wires, 'white');
-      }
-      if (count(wires, 'white') === 0) return last;
-      return 3;
+      if (lowerOfHighestPair(c) === -1) return lowestOfMostCommon(c); // line 1
+      if (differentColors(c) % 2 === 1) return lowerOfHighestPair(c); // line 2
+      if (lowestOnce(c) !== -1) return bottom - lowestOnce(c); // line 3: the mirrored wire
+      return 2; // line 4
     default:
       throw new Error(`wires: unsupported wire count ${wires.length}`);
   }
